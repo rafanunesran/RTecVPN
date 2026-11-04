@@ -26,19 +26,19 @@ for arch in arm64 x86_64; do
   rm -rf "$B" && mkdir -p "$B" "$P/include" "$P/lib"
   flags="-arch $arch -mmacosx-version-min=$MIN -O2"
 
-  cp -R "$W/src/openssl-$OPENSSL_VERSION" "$B/openssl"
+  cp -Rp "$W/src/openssl-$OPENSSL_VERSION" "$B/openssl"
   (cd "$B/openssl" && ./Configure "darwin64-$arch-cc" no-shared no-tests no-docs --prefix="$P" --libdir=lib "-mmacosx-version-min=$MIN" \
      && make -j"$JOBS" >/dev/null && make install_sw >/dev/null)
 
-  cp -R "$W/src/lzo-$LZO_VERSION" "$B/lzo"
+  cp -Rp "$W/src/lzo-$LZO_VERSION" "$B/lzo"
   (cd "$B/lzo" && CFLAGS="$flags" ./configure --host="$host" --prefix="$P" --disable-shared >/dev/null \
      && make -j"$JOBS" >/dev/null && make install >/dev/null)
 
-  cp -R "$W/src/lz4-$LZ4_VERSION" "$B/lz4"
+  cp -Rp "$W/src/lz4-$LZ4_VERSION" "$B/lz4"
   (cd "$B/lz4/lib" && make -j"$JOBS" liblz4.a CFLAGS="$flags" >/dev/null \
      && cp liblz4.a "$P/lib/" && cp lz4.h lz4hc.h lz4frame.h "$P/include/")
 
-  cp -R "$W/src/openvpn-$OPENVPN_VERSION" "$B/openvpn"
+  cp -Rp "$W/src/openvpn-$OPENVPN_VERSION" "$B/openvpn"
   (cd "$B/openvpn" && CFLAGS="$flags" \
      OPENSSL_CFLAGS="-I$P/include" OPENSSL_LIBS="-L$P/lib -lssl -lcrypto" \
      LZO_CFLAGS="-I$P/include" LZO_LIBS="-L$P/lib -llzo2" \
