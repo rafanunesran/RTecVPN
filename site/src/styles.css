@@ -1,0 +1,81 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Design gerado no Lovable (projeto "RTecVPN Landing Page"). */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-popover: var(--popover);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+:root {
+  --radius: 1rem;
+  --background: oklch(0.16 0.035 268);
+  --foreground: oklch(0.94 0.015 270);
+  --card: oklch(1 0 0 / 4%);
+  --popover: oklch(0.2 0.04 268);
+  --primary: oklch(0.79 0.13 215);
+  --primary-foreground: oklch(0.16 0.035 268);
+  --secondary: oklch(1 0 0 / 7%);
+  --muted: oklch(1 0 0 / 5%);
+  --muted-foreground: oklch(0.7 0.04 268);
+  --accent: oklch(0.6 0.22 293);
+  --accent-foreground: oklch(0.98 0 0);
+  --success: oklch(0.72 0.19 150);
+  --destructive: oklch(0.65 0.22 15);
+  --border: oklch(1 0 0 / 9%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.79 0.13 215);
+  --gradient-accent: linear-gradient(135deg, oklch(0.79 0.13 215), oklch(0.6 0.22 293));
+  --shadow-glow: 0 0 40px -8px color-mix(in oklab, var(--primary) 60%, transparent);
+  --shadow-glow-violet: 0 0 70px -10px color-mix(in oklab, var(--accent) 60%, transparent);
+}
+
+@utility bg-gradient-accent { background-image: var(--gradient-accent); }
+@utility text-gradient { background-image: var(--gradient-accent); -webkit-background-clip: text; background-clip: text; color: transparent; }
+@utility shadow-glow { box-shadow: var(--shadow-glow); }
+@utility shadow-glow-violet { box-shadow: var(--shadow-glow-violet); }
+@utility glass { background: var(--card); border: 1px solid var(--border); backdrop-filter: blur(18px) saturate(140%); }
+@utility bg-grid {
+  background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse at 50% 0%, black 30%, transparent 75%);
+}
+@utility animate-pulse-ring { animation: pulse-ring 2.4s ease-out infinite; }
+@keyframes pulse-ring { 0% { transform: scale(0.9); opacity: .8 } 100% { transform: scale(1.5); opacity: 0 } }
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html { scroll-behavior: smooth; }
+  :focus-visible { outline: 2px solid var(--color-ring); outline-offset: 3px; }
+  body { background-color: var(--color-background); color: var(--color-foreground); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-pulse-ring { animation: none; }
+}

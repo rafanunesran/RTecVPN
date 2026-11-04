@@ -8,6 +8,7 @@ VPN gratuita e de código aberto, baseada em **WireGuard**. Você roda o própri
 |---|---|
 | `server/` | Scripts que instalam o WireGuard num servidor Linux e criam clientes com QR code |
 | `android/` | App Android (Kotlin) |
+| `site/` | Página de download publicada no GitHub Pages: https://rafanunesran.github.io/RTecVPN/ |
 | *(em breve)* | Apps para Windows, macOS e Linux |
 
 ## Funcionalidades do app Android
@@ -47,3 +48,9 @@ cd android
 Abra o app, toque em **Escanear QR code** e aponte para o QR mostrado pelo `add-client.sh`.
 
 A configuração gerada também funciona no app oficial do WireGuard, em qualquer sistema.
+
+## Página de download
+
+A página em `site/` (React + Vite + Tailwind, design feito no Lovable) lê o último GitHub Release e mostra o botão certo para cada sistema, pela extensão do arquivo: `.apk` (Android), `.exe`/`.msi` (Windows), `.dmg`/`.pkg` (macOS), `.AppImage`/`.deb`/`.rpm`/`.tar.gz` (Linux). O workflow `pages.yml` publica a página a cada push em `site/` e a cada release novo.
+
+Para rodar localmente: `cd site && npm install && npm run dev`.
