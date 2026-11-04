@@ -64,13 +64,19 @@ jobs:
       - name: Versão a partir da tag
         shell: bash
         working-directory: desktop
+        env:
+          HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && '1' || '' }}
         run: |
           V="${TAG#v}"
-          node -e "const f='src-tauri/tauri.conf.json';const c=require('./'+f);c.version='$V';require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
+          # Sem a chave do atualizador, gera os instaladores sem os pacotes de atualização
+          node -e "const f='src-tauri/tauri.conf.json';const c=require('./'+f);c.version='$V';if(!process.env.HAS_UPDATER_KEY){c.bundle.createUpdaterArtifacts=false;console.log('::warning::Sem TAURI_SIGNING_PRIVATE_KEY: atualização automática do desktop desativada nesta versão')}require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
           npm ci
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # Assina os pacotes de atualização (latest.json) para o atualizador do app
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: desktop
           tagName: ${{ env.TAG }}
@@ -95,6 +101,9 @@ jobs:
             echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
             echo "RTECVPN_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
           fi
+      - name: Aviso sem chave fixa
+        if: env.RTECVPN_KEYSTORE == ''
+        run: echo "::warning::Sem o secret ANDROID_KEYSTORE_BASE64 o APK sai com chave de debug e a atualização pelo app não funciona."
       - name: Compilar APK
         working-directory: android
         env:

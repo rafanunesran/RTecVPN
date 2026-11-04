@@ -204,6 +204,13 @@ function render(s) {
     return el("div", { className: "row-item" }, el("div", {}, el("b", { textContent: name })), sw, rm);
   }) : [el("p", { className: "muted", textContent: "Nenhuma rede ainda." })]));
 
+  // Atualização
+  $("updateBanner").hidden = !s.update_version;
+  $("updateTitle").textContent = s.update_version ? `Nova versão ${s.update_version}` : "";
+  $("updateSub").textContent = s.update_error || (s.update_installing ? "Baixando e instalando…" : "Atualiza e reinicia o app");
+  $("updateBtn").disabled = s.update_installing;
+  $("updateStatus").textContent = s.update_installing ? "Baixando e instalando…" : s.update_error || (s.update_version ? `Versão ${s.update_version} disponível: toque para atualizar` : "Atualiza direto pelo app");
+
   // Ajustes
   $("autostartSwitch").checked = s.autostart;
   $("version").textContent = `Versão ${s.version}`;
@@ -271,6 +278,18 @@ $("obNext").addEventListener("click", () => {
 $("obSkip").addEventListener("click", () => saveSettings({ onboarding_done: true }));
 
 $("fab").addEventListener("click", openSheet);
+$("updateBtn").addEventListener("click", () => call("install_update"));
+$("checkUpdate").addEventListener("click", async () => {
+  if (status.update_version) return call("install_update");
+  $("updateStatus").textContent = "Verificando…";
+  try {
+    const s = await invoke("check_for_update");
+    render(s);
+    if (!s.update_version) $("updateStatus").textContent = "Você está na versão mais recente";
+  } catch (e) {
+    $("updateStatus").textContent = `Não foi possível verificar: ${e}`;
+  }
+});
 document.querySelectorAll("#serverTabs button").forEach((b) => b.addEventListener("click", () => { serverTab = b.dataset.st; render(status); }));
 $("vgRefresh").addEventListener("click", () => call("refresh_vpngate"));
 $("sheetCancel").addEventListener("click", () => ($("sheet").hidden = true));

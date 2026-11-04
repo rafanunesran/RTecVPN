@@ -25,8 +25,9 @@ android {
             create("release") {
                 storeFile = file(keystorePath)
                 storePassword = System.getenv("RTECVPN_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("RTECVPN_KEY_ALIAS")
-                keyPassword = System.getenv("RTECVPN_KEY_PASSWORD")
+                keyAlias = System.getenv("RTECVPN_KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "rtecvpn"
+                keyPassword = System.getenv("RTECVPN_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+                    ?: System.getenv("RTECVPN_KEYSTORE_PASSWORD")
             }
         }
     }

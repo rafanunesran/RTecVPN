@@ -25,6 +25,10 @@
         <strong>RTecVPN</strong>
         <button class="icon-btn" data-go="settings" aria-label="Ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
       </header>
+      <div class="card update" id="updateBanner" hidden>
+        <div><b id="updateTitle">Nova versão disponível</b><small id="updateSub">Atualiza e reinicia o app</small></div>
+        <button class="primary small" id="updateBtn">Atualizar</button>
+      </div>
       <div class="connect">
         <div class="halo"></div>
         <svg class="ring" viewBox="0 0 200 200"><circle cx="100" cy="100" r="98" /></svg>
@@ -94,7 +98,7 @@
       <div class="card">
         <div class="row-item"><div><b>RTecVPN</b><small id="version"></small></div></div>
         <a class="row-item" href="https://github.com/rafanunesran/RTecVPN" target="_blank"><div><b>Código no GitHub</b><small>rafanunesran/RTecVPN</small></div><span class="chev">›</span></a>
-        <a class="row-item" href="https://github.com/rafanunesran/RTecVPN/releases/latest" target="_blank"><div><b>Verificar atualizações</b><small>Abre a página de versões</small></div><span class="chev">›</span></a>
+        <div class="row-item" id="checkUpdate"><div><b>Verificar atualizações</b><small id="updateStatus">Atualiza direto pelo app</small></div><span class="chev">›</span></div>
       </div>
     </section>
 

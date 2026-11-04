@@ -14,6 +14,7 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_updater::UpdaterExt;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct ProfileMeta {
@@ -95,6 +96,10 @@ struct Status {
     vg_error: Option<String>,
     /// "wireguard" ou "openvpn": tipo do servidor selecionado.
     kind: String,
+    /// Versão nova disponível para instalar pelo app.
+    update_version: Option<String>,
+    update_installing: bool,
+    update_error: Option<String>,
 }
 
 struct App {
@@ -109,6 +114,13 @@ struct App {
     vg_list: Mutex<Vec<vpngate::VgServer>>,
     vg_loading: Mutex<bool>,
     vg_error: Mutex<Option<String>>,
+    update_version: Mutex<Option<String>>,
+    update_installing: Mutex<bool>,
+    update_error: Mutex<Option<String>>,
+}
+
+async fn tokio_sleep(d: Duration) {
+    let _ = tauri::async_runtime::spawn_blocking(move || std::thread::sleep(d)).await;
 }
 
 fn now_ms() -> u64 {
@@ -207,6 +219,9 @@ impl App {
             vg_loading: *self.vg_loading.lock().unwrap(),
             vg_error: self.vg_error.lock().unwrap().clone(),
             kind: if self.using_vg() { "openvpn" } else { "wireguard" }.into(),
+            update_version: self.update_version.lock().unwrap().clone(),
+            update_installing: *self.update_installing.lock().unwrap(),
+            update_error: self.update_error.lock().unwrap().clone(),
         }
     }
 
@@ -451,6 +466,49 @@ fn pick_default_vg(app: &App) {
     }
 }
 
+// ------------------------------------------------------------------ atualização pelo app
+
+async fn check_update(handle: &AppHandle) -> Result<Option<String>, String> {
+    let update = handle.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
+    let version = update.map(|u| u.version);
+    *handle.state::<App>().update_version.lock().unwrap() = version.clone();
+    emit(handle);
+    Ok(version)
+}
+
+#[tauri::command]
+async fn check_for_update(handle: AppHandle) -> Result<Status, String> {
+    check_update(&handle).await?;
+    Ok(emit(&handle))
+}
+
+#[tauri::command]
+async fn install_update(handle: AppHandle) -> Result<Status, String> {
+    let app = handle.state::<App>();
+    *app.update_installing.lock().unwrap() = true;
+    *app.update_error.lock().unwrap() = None;
+    emit(&handle);
+    let result: Result<(), String> = async {
+        let update = handle
+            .updater()
+            .map_err(|e| e.to_string())?
+            .check()
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Nenhuma atualização disponível")?;
+        update.download_and_install(|_, _| {}, || {}).await.map_err(|e| e.to_string())
+    }
+    .await;
+    *app.update_installing.lock().unwrap() = false;
+    match result {
+        Ok(()) => handle.restart(),
+        Err(e) => {
+            *app.update_error.lock().unwrap() = Some(format!("Falha ao atualizar: {e}"));
+            Err(e)
+        }
+    }
+}
+
 #[tauri::command]
 async fn connect(handle: AppHandle) -> Result<Status, String> {
     let h = handle.clone();
@@ -582,6 +640,7 @@ fn migrate(dir: &std::path::Path, s: &mut Settings) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .setup(|app| {
             let dir = app.path().app_config_dir()?;
@@ -605,6 +664,9 @@ fn main() {
                 ),
                 vg_loading: Mutex::new(false),
                 vg_error: Mutex::new(None),
+                update_version: Mutex::new(None),
+                update_installing: Mutex::new(false),
+                update_error: Mutex::new(None),
             };
             pick_default_vg(&state);
             state.save_settings(&settings);
@@ -644,6 +706,15 @@ fn main() {
             std::thread::spawn(move || watcher(handle));
             let handle = app.handle().clone();
             std::thread::spawn(move || refresh_vg(&handle));
+
+            // Procura versão nova ao abrir e a cada 6 horas
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    let _ = check_update(&handle).await;
+                    tokio_sleep(Duration::from_secs(6 * 3600)).await;
+                }
+            });
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -654,7 +725,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_status, add_profile, rename_profile, delete_profile, select_profile,
-            connect, disconnect, save_settings, set_autostart, select_vg, refresh_vpngate
+            connect, disconnect, save_settings, set_autostart, select_vg, refresh_vpngate,
+            check_for_update, install_update
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o RTecVPN");

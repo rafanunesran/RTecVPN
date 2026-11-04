@@ -23,7 +23,15 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "rpm", "appimage", "msi", "nsis", "dmg", "app"],
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage",
+      "msi",
+      "nsis",
+      "dmg",
+      "app"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -33,8 +41,32 @@
     ],
     "shortDescription": "VPN gratuita baseada em WireGuard",
     "linux": {
-      "deb": { "depends": ["wireguard-tools", "openvpn", "policykit-1"] },
-      "rpm": { "depends": ["wireguard-tools", "openvpn", "polkit"] }
+      "deb": {
+        "depends": [
+          "wireguard-tools",
+          "openvpn",
+          "policykit-1"
+        ]
+      },
+      "rpm": {
+        "depends": [
+          "wireguard-tools",
+          "openvpn",
+          "polkit"
+        ]
+      }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk4ODhFRDJGQTk4NzM0NTQKUldSVU5JZXBMKzJJbUhIeVZacEZYUWdHV0dFTHpMeWZKME9NTEhYUVdYSU50NzA3TGdiVURsRXoK",
+      "endpoints": [
+        "https://github.com/rafanunesran/RTecVPN/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -66,16 +67,12 @@ import br.com.rtec.vpn.ui.WifiScreen
 import br.com.rtec.vpn.ui.WifiUiState
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.net.URL
 
 class MainActivity : ComponentActivity() {
     private lateinit var prefs: Prefs
     private var showAddSheet by mutableStateOf(false)
-    private var updateStatus by mutableStateOf<String?>(null)
+    private var showUpdateDialog by mutableStateOf(false)
     private var vgServers by mutableStateOf<List<VgServer>>(emptyList())
     private var vgLoading by mutableStateOf(false)
     private var vgError by mutableStateOf<String?>(null)
@@ -118,6 +115,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { OpenVpnController.attach(this@MainActivity) }
         vgServers = VpnGate.cached(this)
         refreshVpnGate()
+        checkUpdates(silent = true)
         runCatching { AutoConnectService.sync(this) }
         setContent {
             val version by Prefs.version.collectAsState()
@@ -144,6 +142,16 @@ class MainActivity : ComponentActivity() {
         val state by VpnController.state.collectAsState()
         val since by VpnController.connectedSince.collectAsState()
         val ovpnState by OpenVpnController.state.collectAsState()
+        val updState by Updater.state.collectAsState()
+        val updateStatus = when (val u = updState) {
+            UpdateState.Checking -> "Verificando…"
+            UpdateState.UpToDate -> "Você está na versão mais recente"
+            is UpdateState.Available -> "Nova versão ${u.update.version}: toque para atualizar"
+            is UpdateState.Downloading -> "Baixando ${(u.progress * 100).toInt()}%"
+            UpdateState.Installing -> "Instalando…"
+            is UpdateState.Failed -> u.message
+            UpdateState.Idle -> null
+        }
         val entry by nav.currentBackStackEntryAsState()
         val route = entry?.destination?.route
         val tabs = listOf(
@@ -256,7 +264,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onTheme = { prefs.theme = it },
                             onGithub = { openUrl("https://github.com/rafanunesran/RTecVPN") },
-                            onCheckUpdates = { checkUpdates() },
+                            onCheckUpdates = { if (updState is UpdateState.Available) showUpdateDialog = true else checkUpdates() },
                         )
                     }
                     composable("details") { DetailsScreen(prefs.selectedProfile) { nav.popBackStack() } }
@@ -268,6 +276,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        UpdateDialog()
         if (showInstallOpenVpn) {
             androidx.compose.material3.AlertDialog(
                 onDismissRequest = { showInstallOpenVpn = false },
@@ -413,21 +422,61 @@ class MainActivity : ComponentActivity() {
 
     private fun openUrl(url: String) = runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
 
-    private fun checkUpdates() {
-        updateStatus = "Verificando…"
+    private fun checkUpdates(silent: Boolean = false) {
         lifecycleScope.launch {
-            val latest = withContext(Dispatchers.IO) {
-                runCatching {
-                    val json = URL("https://api.github.com/repos/rafanunesran/RTecVPN/releases/latest").readText()
-                    JSONObject(json).getString("tag_name").removePrefix("v")
-                }.getOrNull()
-            }
-            updateStatus = when {
-                latest == null -> "Não foi possível verificar"
-                latest == BuildConfig.VERSION_NAME -> "Você está na versão mais recente"
-                else -> { openUrl("https://github.com/rafanunesran/RTecVPN/releases/latest"); "Nova versão disponível: $latest" }
-            }
+            val r = Updater.check()
+            if (r is UpdateState.Available) showUpdateDialog = true
+            else if (!silent && r is UpdateState.UpToDate) toast("Você está na versão mais recente")
         }
+    }
+
+    private fun startUpdate(update: AppUpdate) {
+        if (!Updater.canInstall(this)) {
+            toast("Permita que o RTecVPN instale atualizações e toque em Atualizar de novo")
+            Updater.openInstallPermission(this)
+            return
+        }
+        lifecycleScope.launch { Updater.downloadAndInstall(this@MainActivity, update) }
+    }
+
+    @Composable
+    private fun UpdateDialog() {
+        val st by Updater.state.collectAsState()
+        val upd = when (val x = st) {
+            is UpdateState.Available -> x.update
+            is UpdateState.Downloading -> x.update
+            else -> null
+        }
+        if (!showUpdateDialog || (upd == null && st !is UpdateState.Installing)) return
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { if (st !is UpdateState.Downloading) showUpdateDialog = false },
+            title = { Text("Nova versão ${upd?.version.orEmpty()}") },
+            text = {
+                Column {
+                    when (val x = st) {
+                        is UpdateState.Downloading -> {
+                            Text("Baixando… ${(x.progress * 100).toInt()}%")
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = { x.progress }, color = Cyan,
+                                modifier = Modifier.padding(top = 12.dp).fillMaxWidth(),
+                            )
+                        }
+                        UpdateState.Installing -> Text("Confirme a instalação na tela do Android.")
+                        else -> Text(upd?.notes?.take(400)?.ifBlank { null } ?: "Uma nova versão do RTecVPN está disponível.")
+                    }
+                }
+            },
+            confirmButton = {
+                if (st is UpdateState.Available) {
+                    androidx.compose.material3.TextButton(onClick = { upd?.let { startUpdate(it) } }) { Text("Atualizar") }
+                }
+            },
+            dismissButton = {
+                if (st is UpdateState.Available) {
+                    androidx.compose.material3.TextButton(onClick = { showUpdateDialog = false }) { Text("Depois") }
+                }
+            },
+        )
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
