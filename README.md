@@ -1,6 +1,8 @@
 # RTecVPN
 
-VPN gratuita e de código aberto, baseada em **WireGuard**. Você roda o próprio servidor (dá para usar o plano gratuito da Oracle Cloud) e conecta pelo app.
+VPN gratuita e de código aberto. Já vem com **centenas de servidores gratuitos em dezenas de países** (lista pública do [VPN Gate](https://www.vpngate.net/), da Universidade de Tsukuba), e também conecta no **seu próprio servidor WireGuard** (dá para usar o plano gratuito da Oracle Cloud).
+
+> Sobre os servidores do VPN Gate: são mantidos por voluntários, a velocidade varia e o dono de cada servidor pode ver o tráfego que não for criptografado (HTTPS continua protegido). O VPN Gate também guarda registros de conexão por algumas semanas. Para mais privacidade, use seu próprio servidor.
 
 ## O que tem aqui
 
@@ -13,6 +15,7 @@ VPN gratuita e de código aberto, baseada em **WireGuard**. Você roda o própri
 
 ## Funcionalidades do app Android
 
+- **Servidores gratuitos**: aba Gratuitos com filtro por país, ping, velocidade e botão "Melhor servidor"; o app já abre com o melhor selecionado. A conexão OpenVPN passa pelo app gratuito [OpenVPN for Android](https://play.google.com/store/apps/details?id=de.blinkt.openvpn), que o RTecVPN pede para instalar na primeira vez.
 - Botão único para conectar/desconectar, com cronômetro e tráfego da sessão
 - **Vários servidores**: importe por **QR code**, arquivo `.conf` ou colando o texto; renomeie, edite, compartilhe o QR ou exclua
 - **Kill switch** (VPN sempre ativa do Android), conectar ao ligar o celular, **split tunneling** por app e **DNS personalizado**
@@ -55,11 +58,11 @@ Os instaladores ficam na página de [Releases](https://github.com/rafanunesran/R
 
 O app tem as mesmas funções do Android: botão de conectar, importação da configuração e conexão automática em redes Wi-Fi escolhidas. Ele fica na bandeja do sistema ao fechar a janela, para continuar monitorando o Wi-Fi. Ele usa o WireGuard do sistema por baixo:
 
-| Sistema | Precisa ter instalado | Pedido de permissão |
-|---|---|---|
-| Windows | [WireGuard para Windows](https://www.wireguard.com/install/) | UAC ao conectar/desconectar |
-| macOS | `brew install wireguard-tools` | Senha de administrador ao conectar/desconectar |
-| Linux | `wireguard-tools` (o `.deb`/`.rpm` já instala) | Senha via polkit ao conectar/desconectar |
+| Sistema | Servidores gratuitos (OpenVPN) | Seu servidor (WireGuard) | Pedido de permissão |
+|---|---|---|---|
+| Windows | [OpenVPN Community](https://openvpn.net/community-downloads/) | [WireGuard para Windows](https://www.wireguard.com/install/) | UAC ao conectar/desconectar |
+| macOS | `brew install openvpn` | `brew install wireguard-tools` | Senha de administrador ao conectar/desconectar |
+| Linux | `openvpn` (o `.deb`/`.rpm` já instala) | `wireguard-tools` (já instala) | Senha via polkit ao conectar/desconectar |
 
 > No macOS 14.4+ e no Windows 11 24H2 o sistema pode esconder o nome do Wi-Fi de apps sem permissão de localização. Se o app mostrar "Wi-Fi atual: —", libere a localização para o RTecVPN nas configurações do sistema.
 

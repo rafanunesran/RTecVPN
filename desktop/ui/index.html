@@ -47,7 +47,14 @@
     <!-- Servidores -->
     <section id="servers" class="tab">
       <h2>Servidores</h2>
-      <div id="serverList" class="stack"></div>
+      <div class="segmented" id="serverTabs"><button data-st="free" class="on">Gratuitos</button><button data-st="mine">Meus servidores</button></div>
+      <div id="freePane">
+        <div class="row-head"><small class="muted" id="vgCount">Lista do VPN Gate</small><button class="link" id="vgRefresh">Atualizar</button></div>
+        <div class="chips scroll" id="countryChips"></div>
+        <div id="vgError"></div>
+        <div id="vgList" class="stack"></div>
+      </div>
+      <div id="serverList" class="stack" hidden></div>
       <button class="fab" id="fab" aria-label="Adicionar servidor">+</button>
     </section>
 

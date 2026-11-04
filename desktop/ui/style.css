@@ -106,6 +106,19 @@ body.connecting .state { color: var(--warn); }
 .switch:checked::after { transform: translateX(20px); background: var(--bg); }
 
 .chips { display: flex; gap: 8px; margin-top: 10px; }
+.chips.scroll { overflow-x: auto; padding-bottom: 6px; margin: 4px 0 10px; }
+.chips.scroll button { white-space: nowrap; }
+.segmented { display: flex; background: var(--surface); border-radius: 999px; padding: 4px; margin-bottom: 12px; }
+.segmented button { flex: 1; border: 0; background: none; color: var(--muted); padding: 9px; border-radius: 999px; cursor: pointer; font-weight: 600; font-size: 13.5px; }
+.segmented button.on { background: var(--surface-2); color: var(--text); }
+.flag { width: 44px; height: 44px; border-radius: 16px; background: var(--surface-2); display: grid; place-items: center; font-size: 22px; flex-shrink: 0; }
+.pills { display: flex; gap: 6px; margin-top: 4px; font-family: Inter, system-ui, sans-serif; }
+.pill { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 8px; }
+.pill.ok { color: var(--on); background: rgba(34,197,94,.12); }
+.pill.warn { color: var(--warn); background: rgba(245,158,11,.12); }
+.pill.info { color: var(--cyan); background: rgba(34,211,238,.12); }
+.best { border-color: rgba(34,211,238,.5); }
+.best .ico { background: var(--grad); color: var(--ink); }
 .chips button { border: 1px solid var(--border); background: var(--surface-2); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
 .chips button.on { background: rgba(34,211,238,.18); border-color: var(--cyan); }
 
@@ -148,3 +161,9 @@ textarea { font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospa
 .sheet { background: var(--bg); width: 100%; border-radius: 24px 24px 0 0; padding: 20px 16px 24px; display: flex; flex-direction: column; gap: 10px; }
 .sheet h3 { margin: 0; font-size: 17px; }
 .sheet p { margin: 0; font-size: 13.5px; }
+.server .info .pills span { font-family: inherit; font-size: 11px; }
+.server .info .pill.ok { color: var(--on); }
+.server .info .pill.warn { color: var(--warn); }
+.server .info .pill.info { color: var(--cyan); }
+.best .info span { font-family: inherit; font-size: 12px; }
+.pills .pill { flex: none; }

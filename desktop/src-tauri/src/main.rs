@@ -1,7 +1,9 @@
 // Esconde o console no Windows em builds de release
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod openvpn;
 mod platform;
+mod vpngate;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -49,6 +51,9 @@ struct Settings {
     theme: String,
     #[serde(default)]
     onboarding_done: bool,
+    /// Servidor do VPN Gate escolhido (guardado inteiro, porque a lista pública muda).
+    #[serde(default)]
+    selected_vg: Option<vpngate::VgServer>,
 }
 
 impl Default for Settings {
@@ -85,6 +90,11 @@ struct Status {
     tx_bytes: Option<u64>,
     autostart: bool,
     version: String,
+    vg_servers: Vec<vpngate::VgServer>,
+    vg_loading: bool,
+    vg_error: Option<String>,
+    /// "wireguard" ou "openvpn": tipo do servidor selecionado.
+    kind: String,
 }
 
 struct App {
@@ -96,6 +106,9 @@ struct App {
     paused_on: Mutex<Option<String>>,
     active: Mutex<Option<String>>,
     connected_since: Mutex<Option<u64>>,
+    vg_list: Mutex<Vec<vpngate::VgServer>>,
+    vg_loading: Mutex<bool>,
+    vg_error: Mutex<Option<String>>,
 }
 
 fn now_ms() -> u64 {
@@ -124,20 +137,35 @@ impl App {
         self.save_settings(&s);
     }
 
+    fn ovpn(&self) -> openvpn::Paths {
+        openvpn::Paths::new(&self.dir)
+    }
+
+    fn using_vg(&self) -> bool {
+        let s = self.settings.lock().unwrap();
+        s.selected.as_deref().is_some_and(|id| id.starts_with("vg:")) && s.selected_vg.is_some()
+    }
+
+    /// "up", "connecting" ou "down", somando WireGuard e OpenVPN.
+    fn vpn_state(&self) -> &'static str {
+        if platform::is_up(&self.conf_path()) {
+            return "up";
+        }
+        openvpn::state(&self.ovpn())
+    }
+
     fn selected_id(&self) -> Option<String> {
+        if self.using_vg() {
+            return self.settings.lock().unwrap().selected.clone();
+        }
         let s = self.settings.lock().unwrap();
         s.selected.clone().filter(|id| s.profiles.iter().any(|p| &p.id == id)).or_else(|| s.profiles.first().map(|p| p.id.clone()))
     }
 
     fn status(&self, handle: &AppHandle) -> Status {
-        let up = platform::is_up(&self.conf_path());
-        let state = if *self.busy.lock().unwrap() {
-            "connecting"
-        } else if up {
-            "up"
-        } else {
-            "down"
-        };
+        let vpn = self.vpn_state();
+        let up = vpn == "up";
+        let state = if *self.busy.lock().unwrap() { "connecting" } else { vpn };
         if !up {
             *self.connected_since.lock().unwrap() = None;
         } else if self.connected_since.lock().unwrap().is_none() {
@@ -153,7 +181,15 @@ impl App {
                 endpoint: std::fs::read_to_string(self.profile_path(&p.id)).ok().and_then(|t| endpoint(&t)),
             })
             .collect();
-        let (rx, tx) = if up { platform::transfer() } else { (None, None) };
+        let (rx, tx) = if up && !self.using_vg() { platform::transfer() } else { (None, None) };
+        let mut last_error = self.last_error.lock().unwrap().clone();
+        if last_error.is_none() && self.using_vg() && state == "down" {
+            last_error = openvpn::last_error(&self.ovpn());
+        }
+        let mut settings = settings;
+        if let Some(v) = settings.selected_vg.as_mut() {
+            v.config.clear();
+        }
         Status {
             state: state.into(),
             profiles,
@@ -161,12 +197,16 @@ impl App {
             active: if up { self.active.lock().unwrap().clone() } else { None },
             ssid: platform::current_ssid(),
             settings,
-            last_error: self.last_error.lock().unwrap().clone(),
+            last_error,
             connected_since: *self.connected_since.lock().unwrap(),
             rx_bytes: rx,
             tx_bytes: tx,
             autostart: handle.autolaunch().is_enabled().unwrap_or(false),
             version: handle.package_info().version.to_string(),
+            vg_servers: self.vg_list.lock().unwrap().iter().map(|v| v.summary()).collect(),
+            vg_loading: *self.vg_loading.lock().unwrap(),
+            vg_error: self.vg_error.lock().unwrap().clone(),
+            kind: if self.using_vg() { "openvpn" } else { "wireguard" }.into(),
         }
     }
 
@@ -181,11 +221,29 @@ impl App {
         }
         let result = (|| {
             let conf = self.conf_path();
-            if up {
+            let ovpn = self.ovpn();
+            let wg_up = platform::is_up(&conf);
+            let ovpn_up = openvpn::state(&ovpn) != "down";
+            if up && self.using_vg() {
+                let vg = self.settings.lock().unwrap().selected_vg.clone().ok_or("Nenhum servidor selecionado")?;
+                if wg_up {
+                    platform::down(&conf)?;
+                }
+                if ovpn_up {
+                    openvpn::down(&ovpn)?;
+                }
+                write_private(&ovpn.config, &vg.config).map_err(|e| e.to_string())?;
+                openvpn::up(&ovpn)?;
+                *self.active.lock().unwrap() = Some(vg.id());
+                *self.connected_since.lock().unwrap() = Some(now_ms());
+            } else if up {
+                if ovpn_up {
+                    openvpn::down(&ovpn)?;
+                }
                 let id = self.selected_id().ok_or("Nenhum servidor configurado")?;
                 let text = std::fs::read_to_string(self.profile_path(&id)).map_err(|e| e.to_string())?;
                 // Trocando de servidor com a VPN ligada: derruba antes
-                if platform::is_up(&conf) {
+                if wg_up {
                     platform::down(&conf)?;
                 }
                 write_private(&conf, &text).map_err(|e| e.to_string())?;
@@ -193,7 +251,12 @@ impl App {
                 *self.active.lock().unwrap() = Some(id);
                 *self.connected_since.lock().unwrap() = Some(now_ms());
             } else {
-                platform::down(&conf)?;
+                if wg_up {
+                    platform::down(&conf)?;
+                }
+                if ovpn_up {
+                    openvpn::down(&ovpn)?;
+                }
                 *self.active.lock().unwrap() = None;
                 *self.connected_since.lock().unwrap() = None;
             }
@@ -312,7 +375,7 @@ async fn select_profile(handle: AppHandle, id: String) -> Result<Status, String>
         app.update(|s| s.selected = Some(id.clone()));
         // Conectado em outro servidor: troca na hora
         let active = app.active.lock().unwrap().clone();
-        if platform::is_up(&app.conf_path()) && active.as_deref() != Some(&id) {
+        if app.vpn_state() == "up" && active.as_deref() != Some(&id) {
             app.set_tunnel(true)?;
         }
         Ok::<_, String>(())
@@ -320,6 +383,72 @@ async fn select_profile(handle: AppHandle, id: String) -> Result<Status, String>
     .await
     .map_err(|e| e.to_string())??;
     Ok(emit(&handle))
+}
+
+#[tauri::command]
+async fn select_vg(handle: AppHandle, ip: String) -> Result<Status, String> {
+    let h = handle.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let app = h.state::<App>();
+        let srv = app.vg_list.lock().unwrap().iter().find(|v| v.ip == ip).cloned().ok_or("Servidor não está mais na lista")?;
+        let changed = app.selected_id().as_deref() != Some(&srv.id());
+        app.update(|s| {
+            s.selected = Some(srv.id());
+            s.selected_vg = Some(srv.clone());
+        });
+        if changed && app.vpn_state() == "up" {
+            app.set_tunnel(true)?;
+        }
+        Ok::<_, String>(())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    Ok(emit(&handle))
+}
+
+#[tauri::command]
+async fn refresh_vpngate(handle: AppHandle) -> Status {
+    let h = handle.clone();
+    let _ = tauri::async_runtime::spawn_blocking(move || refresh_vg(&h)).await;
+    emit(&handle)
+}
+
+fn refresh_vg(handle: &AppHandle) {
+    let app = handle.state::<App>();
+    {
+        let mut loading = app.vg_loading.lock().unwrap();
+        if *loading {
+            return;
+        }
+        *loading = true;
+    }
+    emit(handle);
+    match vpngate::fetch() {
+        Ok((list, raw)) => {
+            let _ = std::fs::write(app.dir.join("vpngate.csv"), raw);
+            *app.vg_list.lock().unwrap() = list;
+            *app.vg_error.lock().unwrap() = None;
+        }
+        Err(e) => *app.vg_error.lock().unwrap() = Some(e),
+    }
+    *app.vg_loading.lock().unwrap() = false;
+    pick_default_vg(&app);
+    emit(handle);
+}
+
+/// Sem nenhum servidor escolhido: já deixa o melhor gratuito pronto para conectar.
+fn pick_default_vg(app: &App) {
+    let best = app.vg_list.lock().unwrap().first().cloned();
+    let needs = {
+        let s = app.settings.lock().unwrap();
+        s.profiles.is_empty() && s.selected_vg.is_none()
+    };
+    if let (true, Some(best)) = (needs, best) {
+        app.update(|s| {
+            s.selected = Some(best.id());
+            s.selected_vg = Some(best);
+        });
+    }
 }
 
 #[tauri::command]
@@ -406,7 +535,7 @@ fn watcher(handle: AppHandle) {
     loop {
         let app = handle.state::<App>();
         let ssid = platform::current_ssid();
-        let up = platform::is_up(&app.conf_path());
+        let up = app.vpn_state() != "down";
         if ssid != last_ssid {
             failed_for = None; // nova rede: tenta de novo
         }
@@ -462,6 +591,7 @@ fn main() {
                 .and_then(|t| serde_json::from_str(&t).ok())
                 .unwrap_or_default();
             migrate(&dir, &mut settings);
+            let dir_vg = dir.clone();
             let state = App {
                 dir,
                 settings: Mutex::new(settings.clone()),
@@ -470,9 +600,15 @@ fn main() {
                 paused_on: Mutex::new(None),
                 active: Mutex::new(None),
                 connected_since: Mutex::new(None),
+                vg_list: Mutex::new(
+                    std::fs::read_to_string(dir_vg.join("vpngate.csv")).map(|t| vpngate::parse(&t)).unwrap_or_default(),
+                ),
+                vg_loading: Mutex::new(false),
+                vg_error: Mutex::new(None),
             };
+            pick_default_vg(&state);
             state.save_settings(&settings);
-            if platform::is_up(&state.conf_path()) {
+            if state.vpn_state() == "up" {
                 *state.active.lock().unwrap() = state.selected_id();
             }
             app.manage(state);
@@ -506,6 +642,8 @@ fn main() {
 
             let handle = app.handle().clone();
             std::thread::spawn(move || watcher(handle));
+            let handle = app.handle().clone();
+            std::thread::spawn(move || refresh_vg(&handle));
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -516,7 +654,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_status, add_profile, rename_profile, delete_profile, select_profile,
-            connect, disconnect, save_settings, set_autostart
+            connect, disconnect, save_settings, set_autostart, select_vg, refresh_vpngate
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o RTecVPN");

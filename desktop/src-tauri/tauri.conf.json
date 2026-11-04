@@ -33,8 +33,8 @@
     ],
     "shortDescription": "VPN gratuita baseada em WireGuard",
     "linux": {
-      "deb": { "depends": ["wireguard-tools", "policykit-1"] },
-      "rpm": { "depends": ["wireguard-tools", "polkit"] }
+      "deb": { "depends": ["wireguard-tools", "openvpn", "policykit-1"] },
+      "rpm": { "depends": ["wireguard-tools", "openvpn", "polkit"] }
     }
   }
 }

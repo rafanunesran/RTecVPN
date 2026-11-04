@@ -12,11 +12,52 @@ const ICON_WIFI = '<svg viewBox="0 0 24 24"><path d="M2 8.5a15 15 0 0 1 20 0M5 1
 const ONBOARDING = [
   { title: "Privacidade com WireGuard", text: "Criptografia moderna e rápida protegendo tudo o que você faz em redes públicas.",
     icon: '<svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3z"/></svg>' },
-  { title: "Use seu servidor", text: "Sem cadastro e sem limite: você roda o servidor grátis (ex.: Oracle Cloud) e importa a configuração.", icon: ICON_SERVER },
+  { title: "Servidores em vários países", text: "Sem cadastro: escolha entre centenas de servidores gratuitos do VPN Gate, ou use o seu próprio.", icon: ICON_SERVER },
   { title: "Auto-conexão no Wi‑Fi", text: "Escolha as redes onde a VPN liga sozinha, e ela desliga quando você sai delas.", icon: ICON_WIFI },
 ];
 
 let status = null;
+let serverTab = "free";
+let country = null;
+const flagOf = (code) => code && code.length === 2 ? String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65)) : "🌐";
+
+function vgCard(v, s, { best = false, label } = {}) {
+  const selected = !best && `vg:${v.ip}` === s.selected;
+  const card = el("div", { className: `card server${selected ? " selected" : ""}${best ? " best" : ""}` });
+  if (best) {
+    const ico = el("div", { className: "ico" }); ico.innerHTML = '<svg viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>';
+    card.append(ico, el("div", { className: "info" }, el("b", { textContent: label }), el("span", { textContent: "Maior pontuação de velocidade e estabilidade" })));
+  } else {
+    const pills = el("div", { className: "pills" });
+    if (v.ping > 0) pills.append(el("span", { className: `pill ${v.ping < 80 ? "ok" : "warn"}`, textContent: `${v.ping} ms` }));
+    pills.append(el("span", { className: "pill info", textContent: `${Math.round(v.speed / 1e6)} Mbps` }));
+    if (`vg:${v.ip}` === s.active) pills.append(el("span", { className: "pill ok", textContent: "Em uso" }));
+    card.append(el("div", { className: "flag", textContent: flagOf(v.code) }),
+      el("div", { className: "info" }, el("b", { textContent: v.country }), el("span", { textContent: `${v.host} · ${v.transport}` }), pills));
+    if (selected) card.append(el("div", { className: "check", textContent: "✓" }));
+  }
+  card.onclick = () => call("select_vg", { ip: v.ip });
+  return card;
+}
+
+function renderFree(s) {
+  const list = s.vg_servers;
+  const byCountry = {};
+  list.forEach((v) => (byCountry[v.code] ||= []).push(v));
+  const countries = Object.entries(byCountry).sort((a, b) => b[1].length - a[1].length);
+  $("vgCount").textContent = s.vg_loading ? "Atualizando lista…" : list.length ? `${list.length} servidores em ${countries.length} países` : "Lista do VPN Gate";
+  const chip = (label, code) => {
+    const b = el("button", { textContent: label, className: country === code ? "on" : "" });
+    b.onclick = () => { country = code; renderFree(status); };
+    return b;
+  };
+  $("countryChips").replaceChildren(chip("Todos", null), ...countries.map(([code, vs]) => chip(`${flagOf(code)} ${vs[0].country}`, code)));
+  $("vgError").replaceChildren(...(s.vg_error && !list.length ? [el("div", { className: "notice", textContent: s.vg_error })] : []));
+  const shown = list.filter((v) => !country || v.code === country);
+  const cards = shown.slice(0, 150).map((v) => vgCard(v, s));
+  if (shown.length) cards.unshift(vgCard(shown[0], s, { best: true, label: country ? `Melhor servidor em ${shown[0].country}` : "Melhor servidor" }));
+  $("vgList").replaceChildren(...cards);
+}
 let obPage = 0;
 
 // ------------------------------------------------------------ formatação
@@ -94,19 +135,23 @@ const closeMenus = () => document.querySelectorAll(".menu").forEach((m) => m.rem
 function render(s) {
   status = s;
   applyTheme(s.settings.theme);
-  const onboarding = !s.settings.onboarding_done && !s.profiles.length;
+  const onboarding = !s.settings.onboarding_done;
   $("onboarding").hidden = !onboarding;
   $("app").hidden = onboarding;
   if (onboarding) return renderOnboarding();
 
   document.body.className = s.state;
   $("stateLabel").textContent = { up: "Conectado", connecting: "Conectando…", down: "Desconectado" }[s.state];
-  $("toggle").disabled = !s.profiles.length || s.state === "connecting";
+  $("toggle").disabled = !s.selected || s.state === "connecting";
   $("toggle").setAttribute("aria-label", s.state === "up" ? "Desconectar" : "Conectar");
   renderTimer();
 
   const current = s.profiles.find((p) => p.id === s.selected);
-  if (current) {
+  const vg = s.kind === "openvpn" ? s.settings.selected_vg : null;
+  if (vg) {
+    $("homeServer").replaceChildren(vgCard(vg, s));
+    $("homeServer").firstChild.onclick = () => goTab("servers");
+  } else if (current) {
     $("homeServer").replaceChildren(serverCard(current, s, { menu: false, onClick: () => goTab("servers") }));
   } else {
     const add = el("button", { className: "primary", textContent: "+ Adicionar servidor" });
@@ -119,6 +164,10 @@ function render(s) {
   $("error").textContent = s.last_error || "";
 
   // Servidores
+  document.querySelectorAll("#serverTabs button").forEach((b) => b.classList.toggle("on", b.dataset.st === serverTab));
+  $("freePane").hidden = serverTab !== "free";
+  $("serverList").hidden = serverTab !== "mine";
+  renderFree(s);
   if (s.profiles.length) {
     $("serverList").replaceChildren(...s.profiles.map((p) => serverCard(p, s)));
   } else {
@@ -127,7 +176,7 @@ function render(s) {
     $("serverList").replaceChildren(
       el("p", { className: "muted center", textContent: "Nenhum servidor ainda. Rode o add-client.sh no seu servidor e importe o arquivo gerado." }), add);
   }
-  $("fab").hidden = !s.profiles.length;
+  $("fab").hidden = !s.profiles.length || serverTab !== "mine";
 
   // Wi-Fi
   const st = s.settings;
@@ -161,7 +210,9 @@ function render(s) {
 
   // Detalhes
   const rows = [
-    ["Interface", "rtecvpn"], ["Servidor", current?.name || "—"], ["Endpoint", current?.endpoint || "—"],
+    ["Protocolo", vg ? `OpenVPN ${vg.transport}` : "WireGuard"],
+    ["Servidor", vg ? `${flagOf(vg.code)} ${vg.country} (${vg.host})` : current?.name || "—"],
+    ["Endpoint", vg ? vg.ip : current?.endpoint || "—"],
     ["Estado", $("stateLabel").textContent], ["Tráfego", s.rx_bytes != null && s.state === "up" ? `↓ ${fmtBytes(s.rx_bytes)}  ↑ ${fmtBytes(s.tx_bytes)}` : "—"],
   ];
   $("detailList").replaceChildren(...rows.map(([k, v]) => el("div", { className: "detail" }, el("span", { textContent: k }), el("b", { textContent: v }))));
@@ -170,7 +221,7 @@ function render(s) {
 function renderTimer() {
   if (!status) return;
   const since = status.state === "up" && status.connected_since;
-  $("timer").textContent = since ? fmtDur(Date.now() - since) : status.profiles.length ? "Toque para proteger sua conexão" : "Adicione um servidor para começar";
+  $("timer").textContent = since ? fmtDur(Date.now() - since) : status.selected ? "Toque para proteger sua conexão" : "Carregando servidores gratuitos…";
   $("session").textContent = since ? fmtDur(Date.now() - since).slice(0, 5) : "—";
 }
 setInterval(renderTimer, 1000);
@@ -220,6 +271,8 @@ $("obNext").addEventListener("click", () => {
 $("obSkip").addEventListener("click", () => saveSettings({ onboarding_done: true }));
 
 $("fab").addEventListener("click", openSheet);
+document.querySelectorAll("#serverTabs button").forEach((b) => b.addEventListener("click", () => { serverTab = b.dataset.st; render(status); }));
+$("vgRefresh").addEventListener("click", () => call("refresh_vpngate"));
 $("sheetCancel").addEventListener("click", () => ($("sheet").hidden = true));
 $("fileInput").addEventListener("change", async (e) => {
   const file = e.target.files[0];
@@ -239,9 +292,9 @@ $("sheetSave").addEventListener("click", async () => {
 });
 
 $("autoSwitch").addEventListener("change", (e) => {
-  if (e.target.checked && !status.profiles.length) {
+  if (e.target.checked && !status.selected) {
     e.target.checked = false;
-    return showError("Adicione um servidor primeiro.");
+    return showError("Escolha um servidor primeiro.");
   }
   saveSettings({ auto_connect: e.target.checked });
 });
