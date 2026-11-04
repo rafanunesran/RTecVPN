@@ -13,6 +13,7 @@ use std::process::{Command, Output};
 pub struct Paths {
     pub config: PathBuf,
     pub log: PathBuf,
+    #[cfg_attr(windows, allow(dead_code))]
     pub pid: PathBuf,
 }
 
