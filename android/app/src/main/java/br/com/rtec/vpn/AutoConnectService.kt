@@ -35,8 +35,9 @@ class AutoConnectService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private lateinit var cm: ConnectivityManager
     private lateinit var prefs: Prefs
-    /** Redes Wi-Fi atuais e seus SSIDs. */
-    private val wifiNetworks = mutableMapOf<Network, String?>()
+    /** Redes Wi-Fi atuais: SSID e se é aberta (sem senha). */
+    private data class WifiNet(val ssid: String?, val open: Boolean)
+    private val wifiNetworks = mutableMapOf<Network, WifiNet>()
 
     private inner class WifiCallback : ConnectivityManager.NetworkCallback {
         constructor() : super()
@@ -44,8 +45,8 @@ class AutoConnectService : Service() {
         constructor(flags: Int) : super(flags)
 
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-            val ssid = WifiUtils.ssidFrom(caps, this@AutoConnectService)
-            scope.launch { wifiNetworks[network] = ssid; evaluate() }
+            val net = WifiNet(WifiUtils.ssidFrom(caps, this@AutoConnectService), WifiUtils.isOpen(caps))
+            scope.launch { wifiNetworks[network] = net; evaluate() }
         }
 
         override fun onLost(network: Network) {
@@ -78,12 +79,13 @@ class AutoConnectService : Service() {
     }
 
     private fun evaluate() {
-        val trusted = prefs.trustedSsids
-        val current = wifiNetworks.values.filterNotNull().toSet()
+        val trusted = prefs.activeSsids
+        val current = wifiNetworks.values.mapNotNull { it.ssid }.toSet()
         // Usuário desligou na mão nesta rede: respeita até trocar de rede
         prefs.pausedSsid?.let { if (it !in current) prefs.pausedSsid = null }
         val paused = prefs.pausedSsid != null
-        val onTrusted = current.any { it in trusted }
+        val onTrusted = current.any { it in trusted } ||
+            (prefs.connectOnOpenWifi && wifiNetworks.values.any { it.open })
         val state = TunnelManager.state.value
         scope.launch {
             try {
@@ -94,7 +96,7 @@ class AutoConnectService : Service() {
                     }
                     TunnelManager.connect(this@AutoConnectService)
                     prefs.autoStarted = true
-                } else if (!onTrusted && state != VpnState.DOWN && prefs.autoStarted) {
+                } else if (!onTrusted && state != VpnState.DOWN && prefs.autoStarted && prefs.disconnectOnLeave) {
                     TunnelManager.disconnect(this@AutoConnectService)
                     prefs.autoStarted = false
                 }

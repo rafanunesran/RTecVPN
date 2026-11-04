@@ -1,29 +1,5 @@
 <resources>
     <string name="app_name">RTecVPN</string>
-    <string name="status_off">Desconectado</string>
-    <string name="status_connecting">Conectando…</string>
-    <string name="status_on">Conectado</string>
-    <string name="connect">Conectar</string>
-    <string name="disconnect">Desconectar</string>
-    <string name="scan_qr">Escanear QR code</string>
-    <string name="import_file">Importar arquivo .conf</string>
-    <string name="paste_config">Colar configuração</string>
-    <string name="no_config">Nenhum servidor configurado. Escaneie o QR code gerado pelo add-client.sh.</string>
-    <string name="config_saved">Configuração salva</string>
-    <string name="config_invalid">Configuração inválida: %1$s</string>
-    <string name="vpn_denied">Permissão de VPN negada</string>
-    <string name="error">Erro: %1$s</string>
-    <string name="server_label">Servidor: %1$s</string>
-    <string name="settings">Conexão automática por Wi-Fi</string>
-    <string name="auto_switch">Ligar VPN em redes escolhidas</string>
-    <string name="auto_help">A VPN liga sozinha quando você entra numa das redes abaixo e desliga quando sai dela ou o Wi-Fi cai. Se você ligou a VPN manualmente, ela não é desligada.</string>
-    <string name="trusted_title">Redes Wi-Fi (toque para remover)</string>
-    <string name="add_current">Adicionar rede atual</string>
-    <string name="add_manual">Adicionar pelo nome</string>
-    <string name="remove_ssid">Remover a rede "%1$s"?</string>
-    <string name="no_wifi">Você não está conectado a um Wi-Fi (ou a localização está desligada).</string>
-    <string name="location_rationale">O Android só informa o nome da rede Wi-Fi para apps com permissão de localização. O RTecVPN usa isso apenas para saber em qual rede você está, nada é enviado para fora do aparelho.</string>
-    <string name="location_needed">Sem permissão de localização não dá para identificar a rede Wi-Fi.</string>
     <string name="auto_channel">Conexão automática</string>
     <string name="auto_notification">Monitorando redes Wi-Fi para a VPN</string>
 </resources>
