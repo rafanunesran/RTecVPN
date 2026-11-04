@@ -13,9 +13,11 @@ VPN gratuita e de código aberto, baseada em **WireGuard**. Você roda o própri
 
 ## Funcionalidades do app Android
 
-- Botão único para conectar/desconectar
-- Importa a configuração por **QR code**, arquivo `.conf` ou colando o texto
-- **Conexão automática por Wi-Fi**: escolha redes (ex.: Wi-Fi do café, do trabalho). Ao entrar nelas a VPN liga sozinha; ao sair ou o Wi-Fi cair, desliga. Se você ligou a VPN na mão, ela não é desligada automaticamente.
+- Botão único para conectar/desconectar, com cronômetro e tráfego da sessão
+- **Vários servidores**: importe por **QR code**, arquivo `.conf` ou colando o texto; renomeie, edite, compartilhe o QR ou exclua
+- **Kill switch** (VPN sempre ativa do Android), conectar ao ligar o celular, **split tunneling** por app e **DNS personalizado**
+- Tema escuro e claro, onboarding e tela de detalhes da conexão
+- **Conexão automática por Wi-Fi**: escolha redes (ex.: Wi-Fi do café, do trabalho). Ao entrar nelas a VPN liga sozinha; ao sair ou o Wi-Fi cair, desliga. Se você ligou ou desligou a VPN na mão, o app respeita até você trocar de rede. Opcional: conectar em qualquer Wi-Fi aberto.
 - O monitor de Wi-Fi volta a funcionar depois de reiniciar o celular
 
 > O Android só informa o nome da rede Wi-Fi para apps com permissão de localização, por isso o app pede essa permissão ao ativar a conexão automática.
