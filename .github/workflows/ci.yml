@@ -31,3 +31,30 @@ jobs:
         with:
           name: rtecvpn-debug-apk
           path: android/app/build/outputs/apk/debug/*.apk
+
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v5
+      - name: Dependências do Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Testes
+        working-directory: desktop/src-tauri
+        run: cargo test
+      - name: Clippy
+        working-directory: desktop/src-tauri
+        run: rustup component add clippy && cargo clippy -- -D warnings

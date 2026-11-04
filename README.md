@@ -8,8 +8,8 @@ VPN gratuita e de código aberto, baseada em **WireGuard**. Você roda o própri
 |---|---|
 | `server/` | Scripts que instalam o WireGuard num servidor Linux e criam clientes com QR code |
 | `android/` | App Android (Kotlin) |
+| `desktop/` | App para Windows, macOS e Linux (Tauri) |
 | `site/` | Página de download publicada no GitHub Pages: https://rafanunesran.github.io/RTecVPN/ |
-| *(em breve)* | Apps para Windows, macOS e Linux |
 
 ## Funcionalidades do app Android
 
@@ -46,6 +46,30 @@ cd android
 ```
 
 Abra o app, toque em **Escanear QR code** e aponte para o QR mostrado pelo `add-client.sh`.
+
+## 3. App para Windows, macOS e Linux
+
+Os instaladores ficam na página de [Releases](https://github.com/rafanunesran/RTecVPN/releases): `.msi`/`-setup.exe` (Windows), `.dmg` (macOS), `.AppImage`/`.deb`/`.rpm` (Linux).
+
+O app tem as mesmas funções do Android: botão de conectar, importação da configuração e conexão automática em redes Wi-Fi escolhidas. Ele fica na bandeja do sistema ao fechar a janela, para continuar monitorando o Wi-Fi. Ele usa o WireGuard do sistema por baixo:
+
+| Sistema | Precisa ter instalado | Pedido de permissão |
+|---|---|---|
+| Windows | [WireGuard para Windows](https://www.wireguard.com/install/) | UAC ao conectar/desconectar |
+| macOS | `brew install wireguard-tools` | Senha de administrador ao conectar/desconectar |
+| Linux | `wireguard-tools` (o `.deb`/`.rpm` já instala) | Senha via polkit ao conectar/desconectar |
+
+> No macOS 14.4+ e no Windows 11 24H2 o sistema pode esconder o nome do Wi-Fi de apps sem permissão de localização. Se o app mostrar "Wi-Fi atual: —", libere a localização para o RTecVPN nas configurações do sistema.
+
+Para compilar localmente: `cd desktop && npm ci && npx tauri build`.
+
+## Publicar uma versão
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+O workflow `Release` gera todos os instaladores e o APK e publica no GitHub Releases. Para o APK ter assinatura fixa (necessário para atualizar o app sem desinstalar), crie os secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` e `ANDROID_KEY_PASSWORD`; sem eles o APK sai assinado com chave de debug.
 
 A configuração gerada também funciona no app oficial do WireGuard, em qualquer sistema.
 

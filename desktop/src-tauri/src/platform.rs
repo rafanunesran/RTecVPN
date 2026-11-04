@@ -1,0 +1,220 @@
+//! Comandos específicos de cada sistema para ligar/desligar o WireGuard e ler o Wi-Fi atual.
+//!
+//! - Linux: `wg-quick` (pacote wireguard-tools) com elevação via `pkexec`.
+//! - macOS: `wg-quick` do Homebrew com o prompt de administrador do `osascript`.
+//! - Windows: serviço de túnel do WireGuard para Windows (`wireguard.exe /installtunnelservice`) via UAC.
+
+use std::path::Path;
+use std::process::{Command, Output};
+
+pub const TUNNEL: &str = "rtecvpn";
+
+fn run(cmd: &mut Command) -> Result<Output, String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd.output().map_err(|e| e.to_string())
+}
+
+fn check(out: Output) -> Result<(), String> {
+    if out.status.success() {
+        Ok(())
+    } else {
+        let msg = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        Err(if msg.is_empty() { format!("comando falhou ({})", out.status) } else { msg })
+    }
+}
+
+// ---------------------------------------------------------------- Linux
+#[cfg(target_os = "linux")]
+pub fn up(conf: &Path) -> Result<(), String> {
+    check(run(Command::new("pkexec").arg("wg-quick").arg("up").arg(conf))?)
+}
+
+#[cfg(target_os = "linux")]
+pub fn down(conf: &Path) -> Result<(), String> {
+    check(run(Command::new("pkexec").arg("wg-quick").arg("down").arg(conf))?)
+}
+
+#[cfg(target_os = "linux")]
+pub fn is_up(_conf: &Path) -> bool {
+    Path::new("/sys/class/net").join(TUNNEL).exists()
+}
+
+#[cfg(target_os = "linux")]
+pub fn current_ssid() -> Option<String> {
+    if let Ok(out) = run(Command::new("nmcli").args(["-t", "-f", "ACTIVE,SSID", "dev", "wifi"])) {
+        let text = String::from_utf8_lossy(&out.stdout);
+        for line in text.lines() {
+            if let Some(ssid) = line.strip_prefix("yes:").or_else(|| line.strip_prefix("sim:")) {
+                let ssid = ssid.replace("\\:", ":");
+                if !ssid.is_empty() {
+                    return Some(ssid);
+                }
+            }
+        }
+    }
+    let out = run(Command::new("iwgetid").arg("-r")).ok()?;
+    clean(&String::from_utf8_lossy(&out.stdout))
+}
+
+// ---------------------------------------------------------------- macOS
+#[cfg(target_os = "macos")]
+fn wg_quick() -> &'static str {
+    ["/opt/homebrew/bin/wg-quick", "/usr/local/bin/wg-quick"]
+        .into_iter()
+        .find(|p| Path::new(p).exists())
+        .unwrap_or("wg-quick")
+}
+
+#[cfg(target_os = "macos")]
+fn admin_shell(script: &str) -> Result<(), String> {
+    // PATH do Homebrew para o wg-quick achar o bash 4+ e o wireguard-go
+    let full = format!("export PATH=/opt/homebrew/bin:/usr/local/bin:$PATH; {script}");
+    let escaped = full.replace('\\', "\\\\").replace('"', "\\\"");
+    let apple = format!("do shell script \"{escaped}\" with administrator privileges");
+    check(run(Command::new("osascript").arg("-e").arg(apple))?)
+}
+
+#[cfg(target_os = "macos")]
+fn quote(p: &Path) -> String {
+    format!("'{}'", p.display().to_string().replace('\'', "'\\''"))
+}
+
+#[cfg(target_os = "macos")]
+pub fn up(conf: &Path) -> Result<(), String> {
+    admin_shell(&format!("{} up {}", wg_quick(), quote(conf)))
+}
+
+#[cfg(target_os = "macos")]
+pub fn down(conf: &Path) -> Result<(), String> {
+    admin_shell(&format!("{} down {}", wg_quick(), quote(conf)))
+}
+
+#[cfg(target_os = "macos")]
+pub fn is_up(conf: &Path) -> bool {
+    // /var/run/wireguard só é legível pelo root, então procuramos o IP do túnel numa interface utun
+    let Some(addr) = tunnel_address(conf) else { return false };
+    run(&mut Command::new("ifconfig"))
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains(&format!("inet {addr} ")))
+        .unwrap_or(false)
+}
+
+/// Primeiro IPv4 da linha `Address =` da config (sem o /prefixo).
+#[allow(dead_code)]
+pub fn tunnel_address(conf: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(conf).ok()?;
+    text.lines()
+        .filter_map(|l| l.split_once('='))
+        .find(|(k, _)| k.trim().eq_ignore_ascii_case("address"))
+        .and_then(|(_, v)| v.split(',').map(str::trim).find(|a| a.contains('.')).map(|a| a.split('/').next().unwrap_or(a).to_string()))
+}
+
+#[cfg(target_os = "macos")]
+pub fn current_ssid() -> Option<String> {
+    for iface in ["en0", "en1"] {
+        if let Ok(out) = run(Command::new("ipconfig").args(["getsummary", iface])) {
+            let text = String::from_utf8_lossy(&out.stdout);
+            for line in text.lines() {
+                if let Some(v) = line.trim().strip_prefix("SSID : ") {
+                    if let Some(s) = clean(v) {
+                        return Some(s);
+                    }
+                }
+            }
+        }
+        if let Ok(out) = run(Command::new("networksetup").args(["-getairportnetwork", iface])) {
+            let text = String::from_utf8_lossy(&out.stdout);
+            if let Some((_, v)) = text.split_once(": ") {
+                if let Some(s) = clean(v) {
+                    return Some(s);
+                }
+            }
+        }
+    }
+    None
+}
+
+// ---------------------------------------------------------------- Windows
+#[cfg(windows)]
+fn wireguard_exe() -> String {
+    let base = std::env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".into());
+    format!("{base}\\WireGuard\\wireguard.exe")
+}
+
+#[cfg(windows)]
+fn elevated(args: &[&str]) -> Result<(), String> {
+    let exe = wireguard_exe();
+    if !Path::new(&exe).exists() {
+        return Err("Instale o WireGuard para Windows: https://www.wireguard.com/install/".into());
+    }
+    let list = args
+        .iter()
+        .map(|a| format!("'\"{}\"'", a.replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(",");
+    let ps = format!(
+        "$p = Start-Process -FilePath '{exe}' -ArgumentList {list} -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode"
+    );
+    check(run(Command::new("powershell").args(["-NoProfile", "-NonInteractive", "-Command", &ps]))?)
+}
+
+#[cfg(windows)]
+pub fn up(conf: &Path) -> Result<(), String> {
+    elevated(&["/installtunnelservice", &conf.display().to_string()])
+}
+
+#[cfg(windows)]
+pub fn down(_conf: &Path) -> Result<(), String> {
+    elevated(&["/uninstalltunnelservice", TUNNEL])
+}
+
+#[cfg(windows)]
+pub fn is_up(_conf: &Path) -> bool {
+    run(Command::new("sc").args(["query", &format!("WireGuardTunnel${TUNNEL}")]))
+        .map(|o| String::from_utf8_lossy(&o.stdout).contains("RUNNING"))
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+pub fn current_ssid() -> Option<String> {
+    let out = run(Command::new("netsh").args(["wlan", "show", "interfaces"])).ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    for line in text.lines() {
+        let line = line.trim();
+        // "SSID   : nome" (ignora a linha BSSID)
+        if line.starts_with("SSID") && !line.starts_with("BSSID") {
+            if let Some((_, v)) = line.split_once(':') {
+                if let Some(s) = clean(v) {
+                    return Some(s);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn clean(raw: &str) -> Option<String> {
+    let s = raw.trim();
+    if s.is_empty() || s.starts_with('<') || s.contains("not associated") {
+        None
+    } else {
+        Some(s.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clean;
+
+    #[test]
+    fn clean_ignores_empty_and_redacted() {
+        assert_eq!(clean("  Casa  "), Some("Casa".into()));
+        assert_eq!(clean(""), None);
+        assert_eq!(clean("<redacted>"), None);
+        assert_eq!(clean("You are not associated with an AirPort network."), None);
+    }
+}

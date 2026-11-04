@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RTecVPN</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <nav class="tabs">
+    <button data-tab="home" class="active">Início</button>
+    <button data-tab="wifi">Wi-Fi automático</button>
+    <button data-tab="server">Servidor</button>
+  </nav>
+
+  <section id="home" class="tab active">
+    <p class="state" id="stateLabel">Desconectado</p>
+    <button id="toggle" class="power" aria-label="Conectar">
+      <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg>
+    </button>
+    <div class="card info">
+      <div><span>Servidor</span><strong id="server">—</strong></div>
+      <div><span>Wi-Fi atual</span><strong id="ssid">—</strong></div>
+      <div><span>Conexão automática</span><strong id="autoLabel">Desligada</strong></div>
+    </div>
+    <p class="error" id="error" hidden></p>
+  </section>
+
+  <section id="wifi" class="tab">
+    <div class="card">
+      <label class="switch-row">
+        <span>Ligar VPN em redes escolhidas</span>
+        <input type="checkbox" id="autoSwitch" />
+      </label>
+      <p class="muted">A VPN liga sozinha quando você entra numa das redes abaixo e desliga quando sai dela. Se você ligou ou desligou a VPN na mão, o app respeita até você trocar de rede.</p>
+    </div>
+    <ul id="ssidList" class="list"></ul>
+    <button id="addCurrent" class="primary">Adicionar rede atual</button>
+    <form id="addForm" class="row">
+      <input id="ssidInput" placeholder="Nome da rede (SSID)" />
+      <button type="submit" class="secondary">Adicionar</button>
+    </form>
+  </section>
+
+  <section id="server" class="tab">
+    <div class="card">
+      <p class="muted">Cole a configuração gerada pelo <code>add-client.sh</code> no seu servidor, ou abra o arquivo <code>.conf</code>.</p>
+      <textarea id="configText" rows="10" spellcheck="false" placeholder="[Interface]&#10;PrivateKey = ...&#10;Address = 10.8.0.2/32&#10;&#10;[Peer]&#10;PublicKey = ...&#10;Endpoint = 1.2.3.4:51820"></textarea>
+      <div class="row">
+        <label class="secondary file">Abrir arquivo .conf<input type="file" id="fileInput" accept=".conf,text/plain" hidden /></label>
+        <button id="saveConfig" class="primary">Salvar</button>
+      </div>
+    </div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

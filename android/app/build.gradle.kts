@@ -11,12 +11,28 @@ android {
         applicationId = "br.com.rtec.vpn"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // A release (tag vX.Y.Z) passa a versão por variável de ambiente
+        versionName = System.getenv("RTECVPN_VERSION") ?: "0.1.0"
+        versionCode = System.getenv("RTECVPN_VERSION_CODE")?.toInt() ?: 1
+    }
+
+    // Assinatura de release: usa a keystore dos secrets do GitHub se existir,
+    // senão cai na chave de debug (APK instalável, mas sem atualização entre builds diferentes).
+    val keystorePath = System.getenv("RTECVPN_KEYSTORE")
+    signingConfigs {
+        if (keystorePath != null) {
+            create("release") {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("RTECVPN_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RTECVPN_KEY_ALIAS")
+                keyPassword = System.getenv("RTECVPN_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
