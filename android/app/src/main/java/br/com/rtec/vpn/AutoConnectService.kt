@@ -16,6 +16,7 @@ import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -37,17 +38,26 @@ class AutoConnectService : Service() {
     /** Redes Wi-Fi atuais e seus SSIDs. */
     private val wifiNetworks = mutableMapOf<Network, String?>()
 
-    private val callback by lazy {
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO else 0
-        object : ConnectivityManager.NetworkCallback(flags) {
-            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
-                val ssid = WifiUtils.ssidFrom(caps, this@AutoConnectService)
-                scope.launch { wifiNetworks[network] = ssid; evaluate() }
-            }
+    private inner class WifiCallback : ConnectivityManager.NetworkCallback {
+        constructor() : super()
+        @RequiresApi(Build.VERSION_CODES.S)
+        constructor(flags: Int) : super(flags)
 
-            override fun onLost(network: Network) {
-                scope.launch { wifiNetworks.remove(network); evaluate() }
-            }
+        override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+            val ssid = WifiUtils.ssidFrom(caps, this@AutoConnectService)
+            scope.launch { wifiNetworks[network] = ssid; evaluate() }
+        }
+
+        override fun onLost(network: Network) {
+            scope.launch { wifiNetworks.remove(network); evaluate() }
+        }
+    }
+
+    private val callback by lazy {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            WifiCallback(ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO)
+        } else {
+            WifiCallback()
         }
     }
 
@@ -69,11 +79,15 @@ class AutoConnectService : Service() {
 
     private fun evaluate() {
         val trusted = prefs.trustedSsids
-        val onTrusted = wifiNetworks.values.any { it != null && it in trusted }
+        val current = wifiNetworks.values.filterNotNull().toSet()
+        // Usuário desligou na mão nesta rede: respeita até trocar de rede
+        prefs.pausedSsid?.let { if (it !in current) prefs.pausedSsid = null }
+        val paused = prefs.pausedSsid != null
+        val onTrusted = current.any { it in trusted }
         val state = TunnelManager.state.value
         scope.launch {
             try {
-                if (onTrusted && state == VpnState.DOWN) {
+                if (onTrusted && !paused && state == VpnState.DOWN) {
                     if (VpnService.prepare(this@AutoConnectService) != null) {
                         Log.w(TAG, "Permissão de VPN ausente; abra o app para conceder")
                         return@launch

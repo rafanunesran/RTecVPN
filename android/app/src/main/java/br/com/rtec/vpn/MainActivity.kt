@@ -127,6 +127,7 @@ class MainActivity : AppCompatActivity() {
         try {
             TunnelManager.disconnect(this@MainActivity)
             prefs.autoStarted = false
+            prefs.pausedSsid = WifiUtils.currentSsid(this@MainActivity)
         } catch (e: Exception) {
             toast(getString(R.string.error, e.message ?: e.javaClass.simpleName))
         }

@@ -25,7 +25,13 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_AUTO_STARTED, false)
         set(v) = sp.edit().putBoolean(KEY_AUTO_STARTED, v).apply()
 
+    /** Rede em que o usuário desligou a VPN manualmente; não religamos até ele sair dela. */
+    var pausedSsid: String?
+        get() = sp.getString(KEY_PAUSED, null)
+        set(v) = sp.edit().putString(KEY_PAUSED, v).apply()
+
     private companion object {
+        const val KEY_PAUSED = "paused_ssid"
         const val KEY_CONFIG = "config"
         const val KEY_AUTO = "auto_connect"
         const val KEY_SSIDS = "trusted_ssids"
