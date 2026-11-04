@@ -15,7 +15,7 @@ VPN gratuita e de código aberto. Já vem com **centenas de servidores gratuitos
 
 ## Funcionalidades do app Android
 
-- **Servidores gratuitos**: aba Gratuitos com filtro por país, ping, velocidade e botão "Melhor servidor"; o app já abre com o melhor selecionado. A conexão OpenVPN passa pelo app gratuito [OpenVPN for Android](https://play.google.com/store/apps/details?id=de.blinkt.openvpn), que o RTecVPN pede para instalar na primeira vez.
+- **Servidores gratuitos**: aba Gratuitos com filtro por país, ping, velocidade e botão "Melhor servidor"; o app já abre com o melhor selecionado. O motor OpenVPN vem embutido no app (não precisa instalar mais nada).
 - Botão único para conectar/desconectar, com cronômetro e tráfego da sessão
 - **Vários servidores**: importe por **QR code**, arquivo `.conf` ou colando o texto; renomeie, edite, compartilhe o QR ou exclua
 - **Kill switch** (VPN sempre ativa do Android), conectar ao ligar o celular, **split tunneling** por app e **DNS personalizado**
@@ -83,3 +83,9 @@ A configuração gerada também funciona no app oficial do WireGuard, em qualque
 A página em `site/` (React + Vite + Tailwind, design feito no Lovable) lê o último GitHub Release e mostra o botão certo para cada sistema, pela extensão do arquivo: `.apk` (Android), `.exe`/`.msi` (Windows), `.dmg`/`.pkg` (macOS), `.AppImage`/`.deb`/`.rpm`/`.tar.gz` (Linux). O workflow `pages.yml` publica a página a cada push em `site/`. Não precisa republicar a cada release: a página consulta o último release ao abrir.
 
 Para rodar localmente: `cd site && npm install && npm run dev`.
+
+## Motor OpenVPN e licença
+
+O app Android traz embutido o motor do [OpenVPN for Android (ics-openvpn)](https://github.com/schwabe/ics-openvpn), de Arne Schwabe, compilado como biblioteca por `android/openvpn/build-aar.sh` (o CI faz isso sozinho e guarda em cache; a versão fica em `android/openvpn/ICS_VERSION`). Para compilar o APK localmente rode antes `android/openvpn/build-aar.sh` (precisa de JDK 21, Android SDK e `swig`).
+
+O ics-openvpn é GPLv2, então o app Android do RTecVPN, que o inclui, é distribuído sob a GPLv2 (código-fonte completo neste repositório). Veja `android/openvpn/LICENSE-ics-openvpn.txt`.

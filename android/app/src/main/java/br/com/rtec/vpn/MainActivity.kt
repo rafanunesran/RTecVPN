@@ -76,14 +76,9 @@ class MainActivity : ComponentActivity() {
     private var vgServers by mutableStateOf<List<VgServer>>(emptyList())
     private var vgLoading by mutableStateOf(false)
     private var vgError by mutableStateOf<String?>(null)
-    private var showInstallOpenVpn by mutableStateOf(false)
     /** Ação que espera a permissão de VPN (conectar ou ligar o automático). */
     private var afterVpnPermission: (() -> Unit)? = null
     private var afterLocation: (() -> Unit)? = null
-
-    private val openVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (it.resultCode == RESULT_OK) doConnect() else toast("Autorize o RTecVPN no OpenVPN for Android para conectar")
-    }
 
     private val vpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (VpnService.prepare(this) == null) afterVpnPermission?.invoke() else toast("Permissão de VPN negada")
@@ -112,7 +107,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         prefs = Prefs(this)
         lifecycleScope.launch { runCatching { TunnelManager.refresh(this@MainActivity) } }
-        lifecycleScope.launch { OpenVpnController.attach(this@MainActivity) }
         vgServers = VpnGate.cached(this)
         refreshVpnGate()
         checkUpdates(silent = true)
@@ -226,10 +220,9 @@ class MainActivity : ComponentActivity() {
                                 if (p.id == TunnelManager.activeProfileId) doDisconnect()
                                 prefs.deleteProfile(p.id)
                             },
-                            free = FreeServersState(vgServers, vgLoading, vgError, OpenVpnController.isInstalled(this@MainActivity)),
+                            free = FreeServersState(vgServers, vgLoading, vgError),
                             onSelectFree = { srv -> selectFree(srv, state) },
                             onRefreshFree = { refreshVpnGate() },
-                            onInstallOpenVpn = { installOpenVpn() },
                         )
                     }
                     composable("wifi") {
@@ -277,15 +270,6 @@ class MainActivity : ComponentActivity() {
             }
         }
         UpdateDialog()
-        if (showInstallOpenVpn) {
-            androidx.compose.material3.AlertDialog(
-                onDismissRequest = { showInstallOpenVpn = false },
-                title = { Text("Falta um passo") },
-                text = { Text("Os servidores gratuitos do VPN Gate usam OpenVPN. Instale o app grátis \"OpenVPN for Android\" (só uma vez) e volte aqui: o RTecVPN conecta por ele.") },
-                confirmButton = { androidx.compose.material3.TextButton(onClick = { showInstallOpenVpn = false; installOpenVpn() }) { Text("Instalar") } },
-                dismissButton = { androidx.compose.material3.TextButton(onClick = { showInstallOpenVpn = false }) { Text("Agora não") } },
-            )
-        }
         if (showAddSheet) {
             AddServerSheet(
                 onDismiss = { showAddSheet = false },
@@ -326,7 +310,6 @@ class MainActivity : ComponentActivity() {
         val changed = prefs.selectedId != srv.id
         prefs.selectVg(srv)
         if (state == VpnState.UP && changed) requestConnect()
-        else if (state == VpnState.DOWN && !OpenVpnController.isInstalled(this)) showInstallOpenVpn = true
     }
 
     private fun refreshVpnGate() {
@@ -346,25 +329,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun installOpenVpn() {
-        val pkg = OpenVpnController.PACKAGE
-        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg"))) }
-            .onFailure { openUrl("https://play.google.com/store/apps/details?id=$pkg") }
-    }
-
     private fun requestConnect() {
-        if (prefs.usingVpnGate) {
-            if (!OpenVpnController.isInstalled(this)) { showInstallOpenVpn = true; return }
-            lifecycleScope.launch {
-                try {
-                    val intent = OpenVpnController.permissionIntent(this@MainActivity)
-                    if (intent != null) openVpnPermission.launch(intent) else doConnect()
-                } catch (e: Exception) {
-                    toast("Erro: ${e.message ?: e.javaClass.simpleName}")
-                }
-            }
-            return
-        }
         val intent = VpnService.prepare(this)
         if (intent != null) { afterVpnPermission = { doConnect() }; vpnPermission.launch(intent) } else doConnect()
     }

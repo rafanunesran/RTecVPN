@@ -24,7 +24,7 @@ object VpnController {
     val connectedSince: StateFlow<Long?> = combine(TunnelManager.connectedSince, OpenVpnController.connectedSince) { a, b -> a ?: b }
         .stateIn(scope, SharingStarted.Eagerly, null)
 
-    /** true quando o servidor selecionado precisa do app OpenVPN for Android. */
+    /** true quando o servidor selecionado é do VPN Gate (OpenVPN embutido). */
     fun needsOpenVpn(context: Context) = Prefs(context).usingVpnGate
 
     suspend fun connect(context: Context) {

@@ -45,17 +45,26 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+        // A biblioteca do OpenVPN é compilada com um Kotlin mais novo
+        freeCompilerArgs += "-Xskip-metadata-version-check"
     }
     buildFeatures {
         compose = true
         buildConfig = true
-        aidl = true
+    }
+    packaging {
+        // O OpenVPN roda como executável (libovpnexec.so), que precisa ser extraído na instalação
+        jniLibs { useLegacyPackaging = true }
     }
 }
 
 dependencies {
     // Biblioteca oficial do WireGuard para Android (backend em Go, roda em espaço de usuário)
     implementation("com.wireguard.android:tunnel:1.0.20230706")
+    // Motor OpenVPN embutido (ics-openvpn, GPLv2) para os servidores gratuitos do VPN Gate.
+    // Gerado por android/openvpn/build-aar.sh (o CI compila e guarda em cache).
+    implementation(files("libs/ics-openvpn.aar"))
+    implementation("androidx.annotation:annotation:1.9.1")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")

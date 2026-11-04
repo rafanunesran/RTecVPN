@@ -45,7 +45,6 @@ data class FreeServersState(
     val servers: List<VgServer>,
     val loading: Boolean,
     val error: String?,
-    val openVpnInstalled: Boolean,
 )
 
 @Composable
@@ -76,7 +75,6 @@ fun FreeServersList(
     activeId: String?,
     onSelect: (VgServer) -> Unit,
     onRefresh: () -> Unit,
-    onInstallOpenVpn: () -> Unit,
 ) {
     val t = LocalRTec.current
     var country by remember { mutableStateOf<String?>(null) }
@@ -86,13 +84,6 @@ fun FreeServersList(
     val shown = s.servers.filter { country == null || it.countryCode == country }
 
     Column {
-        if (!s.openVpnInstalled) {
-            PermissionNotice(
-                "Os servidores gratuitos usam OpenVPN. Instale o app grátis \"OpenVPN for Android\" uma vez; o RTecVPN controla a conexão por ele.",
-                action = "Instalar OpenVPN for Android", onAction = onInstallOpenVpn,
-            )
-            Spacer(Modifier.height(12.dp))
-        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 if (s.servers.isEmpty()) "Lista do VPN Gate" else "${s.servers.size} servidores em ${countries.size} países",

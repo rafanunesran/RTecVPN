@@ -4,97 +4,97 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
-import android.content.pm.PackageManager
 import android.os.IBinder
-import android.util.Log
-import de.blinkt.openvpn.api.IOpenVPNAPIService
-import de.blinkt.openvpn.api.IOpenVPNStatusCallback
+import de.blinkt.openvpn.core.ConfigParser
+import de.blinkt.openvpn.core.ConnectionStatus
+import de.blinkt.openvpn.core.IOpenVPNServiceInternal
+import de.blinkt.openvpn.core.OpenVPNService
+import de.blinkt.openvpn.core.ProfileManager
+import de.blinkt.openvpn.core.VPNLaunchHelper
+import de.blinkt.openvpn.core.VpnStatus
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.io.StringReader
 
 /**
- * Conecta nos servidores do VPN Gate (OpenVPN) pelo app gratuito "OpenVPN for Android",
- * usando a API pública dele. O RTecVPN mostra a lista e controla a conexão.
+ * Conecta nos servidores do VPN Gate (OpenVPN) com o motor do "OpenVPN for Android"
+ * (ics-openvpn) embutido no próprio RTecVPN. Não precisa de nenhum app extra.
  */
 object OpenVpnController {
-    const val PACKAGE = "de.blinkt.openvpn"
-    private const val TAG = "OpenVpn"
-
-    private var service: IOpenVPNAPIService? = null
-    private var binding: CompletableDeferred<IOpenVPNAPIService>? = null
     private val _state = MutableStateFlow(VpnState.DOWN)
     val state: StateFlow<VpnState> = _state.asStateFlow()
     private val _since = MutableStateFlow<Long?>(null)
     val connectedSince: StateFlow<Long?> = _since.asStateFlow()
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+    private val _bytes = MutableStateFlow(0L to 0L)
+    /** Bytes recebidos e enviados na conexão atual. */
+    val bytes: StateFlow<Pair<Long, Long>> = _bytes.asStateFlow()
 
-    private val callback = object : IOpenVPNStatusCallback.Stub() {
-        override fun newStatus(uuid: String?, state: String?, message: String?, level: String?) {
-            _message.value = message
+    private var initialized = false
+
+    private val stateListener = object : VpnStatus.StateListener {
+        override fun updateState(state: String?, logmessage: String?, localizedResId: Int, level: ConnectionStatus?, intent: Intent?) {
+            _message.value = logmessage
             val new = when (level) {
-                "LEVEL_CONNECTED" -> VpnState.UP
-                "LEVEL_NOTCONNECTED", "LEVEL_NONETWORK", "LEVEL_AUTH_FAILED", null -> VpnState.DOWN
+                ConnectionStatus.LEVEL_CONNECTED -> VpnState.UP
+                ConnectionStatus.LEVEL_NOTCONNECTED, ConnectionStatus.LEVEL_NONETWORK,
+                ConnectionStatus.LEVEL_AUTH_FAILED, ConnectionStatus.UNKNOWN_LEVEL, null -> VpnState.DOWN
                 else -> if (state == "NOPROCESS" || state == "EXITING") VpnState.DOWN else VpnState.CONNECTING
             }
             if (new == VpnState.UP && _since.value == null) _since.value = System.currentTimeMillis()
-            if (new == VpnState.DOWN) _since.value = null
+            if (new == VpnState.DOWN) { _since.value = null; _bytes.value = 0L to 0L }
             _state.value = new
         }
+
+        override fun setConnectedVPN(uuid: String?) {}
     }
 
-    fun isInstalled(context: Context): Boolean = try {
-        context.packageManager.getPackageInfo(PACKAGE, 0)
-        true
-    } catch (e: PackageManager.NameNotFoundException) {
-        false
+    private val byteListener = VpnStatus.ByteCountListener { inBytes, outBytes, _, _ ->
+        _bytes.value = inBytes to outBytes
     }
 
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            val s = IOpenVPNAPIService.Stub.asInterface(binder)
-            service = s
-            runCatching { s.registerStatusCallback(callback) }.onFailure { Log.w(TAG, "callback", it) }
-            binding?.complete(s)
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            service = null
-            binding = null
-            _state.value = VpnState.DOWN
-        }
+    /** Chamado no Application: passa a receber o status do motor OpenVPN. */
+    fun init() {
+        if (initialized) return
+        initialized = true
+        VpnStatus.addStateListener(stateListener)
+        VpnStatus.addByteCountListener(byteListener)
     }
 
-    suspend fun bind(context: Context): IOpenVPNAPIService {
-        service?.let { return it }
-        val d = binding ?: CompletableDeferred<IOpenVPNAPIService>().also { binding = it }
-        val intent = Intent(IOpenVPNAPIService::class.java.name).setPackage(PACKAGE)
-        if (!context.applicationContext.bindService(intent, connection, Context.BIND_AUTO_CREATE)) {
-            binding = null
-            error("Instale o app gratuito \"OpenVPN for Android\" para usar os servidores do VPN Gate")
-        }
-        return withTimeout(10_000) { d.await() }
-    }
-
-    /** Intent para o usuário autorizar o RTecVPN a controlar o OpenVPN for Android (null = já autorizado). */
-    suspend fun permissionIntent(context: Context): Intent? = bind(context).prepare(context.packageName)
-
-    suspend fun connect(context: Context, config: String) {
-        val s = bind(context)
+    /** Conecta com a config .ovpn (a permissão de VPN do Android já deve ter sido dada). */
+    suspend fun connect(context: Context, config: String) = withContext(Dispatchers.IO) {
+        val app = context.applicationContext
+        val parser = ConfigParser()
+        parser.parseConfig(StringReader(config))
+        val profile = parser.convertProfile().apply { mName = "VPN Gate" }
+        ProfileManager.setTemporaryProfile(app, profile)
         _state.value = VpnState.CONNECTING
-        s.startVPN(config)
+        VPNLaunchHelper.startOpenVpn(profile, app, "RTecVPN", true)
     }
 
     suspend fun disconnect(context: Context) {
-        runCatching { bind(context).disconnect() }
-        _state.value = VpnState.DOWN
-    }
+        val app = context.applicationContext
+        val done = CompletableDeferred<Unit>()
+        val conn = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+                runCatching { IOpenVPNServiceInternal.Stub.asInterface(binder).stopVPN(false) }
+                done.complete(Unit)
+            }
 
-    /** Liga o callback de status ao abrir o app, se o OpenVPN for Android estiver instalado. */
-    suspend fun attach(context: Context) {
-        if (isInstalled(context)) runCatching { bind(context) }
+            override fun onServiceDisconnected(name: ComponentName?) {}
+        }
+        val intent = Intent(app, OpenVPNService::class.java).setAction(OpenVPNService.START_SERVICE)
+        if (app.bindService(intent, conn, Context.BIND_AUTO_CREATE)) {
+            withTimeoutOrNull(5_000) { done.await() }
+            runCatching { app.unbindService(conn) }
+        }
+        _state.value = VpnState.DOWN
+        _since.value = null
     }
 }

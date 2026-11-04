@@ -20,6 +20,7 @@ jobs:
         working-directory: android
     steps:
       - uses: actions/checkout@v5
+      - uses: ./.github/actions/ics-openvpn
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

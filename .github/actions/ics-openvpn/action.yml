@@ -1,0 +1,22 @@
+name: Motor OpenVPN (ics-openvpn)
+description: Compila (ou reaproveita do cache) android/app/libs/ics-openvpn.aar
+runs:
+  using: composite
+  steps:
+    - id: cache
+      uses: actions/cache@v4
+      with:
+        path: android/app/libs/ics-openvpn.aar
+        key: ics-openvpn-aar-${{ hashFiles('android/openvpn/**') }}
+    - if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: 21
+    - if: steps.cache.outputs.cache-hit != 'true'
+      name: Compilar o motor OpenVPN
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y swig
+        WORK="$RUNNER_TEMP/ics-openvpn" android/openvpn/build-aar.sh

@@ -71,7 +71,6 @@ fun ServersScreen(
     free: FreeServersState,
     onSelectFree: (VgServer) -> Unit,
     onRefreshFree: () -> Unit,
-    onInstallOpenVpn: () -> Unit,
 ) {
     val t = LocalRTec.current
     var tab by remember { mutableStateOf(if (profiles.isEmpty()) 0 else if (selectedId?.startsWith("vg:") == true) 0 else 1) }
@@ -86,7 +85,7 @@ fun ServersScreen(
             Segmented(listOf("Gratuitos", "Meus servidores"), tab) { tab = it }
             Spacer(Modifier.height(12.dp))
             if (tab == 0) {
-                FreeServersList(free, selectedId, activeId, onSelectFree, onRefreshFree, onInstallOpenVpn)
+                FreeServersList(free, selectedId, activeId, onSelectFree, onRefreshFree)
             } else if (profiles.isEmpty()) {
                 EmptyServers(onAdd)
             } else {
