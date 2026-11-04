@@ -77,6 +77,6 @@ A configuração gerada também funciona no app oficial do WireGuard, em qualque
 
 ## Página de download
 
-A página em `site/` (React + Vite + Tailwind, design feito no Lovable) lê o último GitHub Release e mostra o botão certo para cada sistema, pela extensão do arquivo: `.apk` (Android), `.exe`/`.msi` (Windows), `.dmg`/`.pkg` (macOS), `.AppImage`/`.deb`/`.rpm`/`.tar.gz` (Linux). O workflow `pages.yml` publica a página a cada push em `site/` e a cada release novo.
+A página em `site/` (React + Vite + Tailwind, design feito no Lovable) lê o último GitHub Release e mostra o botão certo para cada sistema, pela extensão do arquivo: `.apk` (Android), `.exe`/`.msi` (Windows), `.dmg`/`.pkg` (macOS), `.AppImage`/`.deb`/`.rpm`/`.tar.gz` (Linux). O workflow `pages.yml` publica a página a cada push em `site/`. Não precisa republicar a cada release: a página consulta o último release ao abrir.
 
 Para rodar localmente: `cd site && npm install && npm run dev`.
