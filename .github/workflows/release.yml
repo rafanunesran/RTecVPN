@@ -66,10 +66,12 @@ jobs:
         working-directory: desktop
         env:
           HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && '1' || '' }}
+          # Chave pública do atualizador (variável do repositório), se você gerou suas próprias chaves
+          UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
         run: |
           V="${TAG#v}"
           # Sem a chave do atualizador, gera os instaladores sem os pacotes de atualização
-          node -e "const f='src-tauri/tauri.conf.json';const c=require('./'+f);c.version='$V';if(!process.env.HAS_UPDATER_KEY){c.bundle.createUpdaterArtifacts=false;console.log('::warning::Sem TAURI_SIGNING_PRIVATE_KEY: atualização automática do desktop desativada nesta versão')}require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
+          node -e "const f='src-tauri/tauri.conf.json';const c=require('./'+f);c.version='$V';if(process.env.UPDATER_PUBKEY){c.plugins.updater.pubkey=process.env.UPDATER_PUBKEY};if(!process.env.HAS_UPDATER_KEY){c.bundle.createUpdaterArtifacts=false;console.log('::warning::Sem TAURI_SIGNING_PRIVATE_KEY: atualização automática do desktop desativada nesta versão')}require('fs').writeFileSync(f,JSON.stringify(c,null,2))"
           npm ci
       - uses: tauri-apps/tauri-action@v0
         env:
