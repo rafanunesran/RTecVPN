@@ -43,8 +43,33 @@ class Prefs(context: Context) {
         get() = sp.getString(KEY_SELECTED, null)
         set(v) = edit { putString(KEY_SELECTED, v) }
 
+    /** Servidor WireGuard próprio selecionado (null se o selecionado for do VPN Gate). */
     val selectedProfile: Profile?
-        get() = profiles.let { list -> list.firstOrNull { it.id == selectedId } ?: list.firstOrNull() }
+        get() {
+            if (selectedId?.startsWith("vg:") == true && selectedVg != null) return null
+            return profiles.let { list -> list.firstOrNull { it.id == selectedId } ?: list.firstOrNull() }
+        }
+
+    /** Servidor do VPN Gate escolhido (guardado inteiro, porque a lista pública muda). */
+    var selectedVg: VgServer?
+        get() = runCatching {
+            val o = JSONObject(sp.getString(KEY_VG, null)!!)
+            VgServer(o.getString("host"), o.getString("ip"), o.optLong("score"), o.optInt("ping"), o.optLong("speed"),
+                o.getString("country"), o.getString("code"), o.optInt("sessions"), o.getString("config"))
+        }.getOrNull()
+        set(v) = edit {
+            if (v == null) remove(KEY_VG) else putString(KEY_VG, JSONObject()
+                .put("host", v.host).put("ip", v.ip).put("score", v.score).put("ping", v.pingMs).put("speed", v.speedBps)
+                .put("country", v.country).put("code", v.countryCode).put("sessions", v.sessions).put("config", v.config).toString())
+        }
+
+    val usingVpnGate: Boolean get() = selectedId?.startsWith("vg:") == true && selectedVg != null
+    val hasAnyServer: Boolean get() = usingVpnGate || selectedProfile != null
+
+    fun selectVg(s: VgServer) {
+        selectedVg = s
+        selectedId = s.id
+    }
 
     fun addProfile(name: String, config: String): Profile {
         val p = Profile(UUID.randomUUID().toString(), name, config)
@@ -139,6 +164,7 @@ class Prefs(context: Context) {
         private const val KEY_OLD_CONFIG = "config"
         private const val KEY_PROFILES = "profiles"
         private const val KEY_SELECTED = "selected_profile"
+        private const val KEY_VG = "selected_vpngate"
         private const val KEY_AUTO = "auto_connect"
         private const val KEY_SSIDS = "trusted_ssids"
         private const val KEY_SSIDS_OFF = "disabled_ssids"

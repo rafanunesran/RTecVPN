@@ -38,7 +38,7 @@ private data class Step(val icon: ImageVector, val title: String, val text: Stri
 
 private val steps = listOf(
     Step(Icons.Rounded.Shield, "Privacidade com WireGuard", "Criptografia moderna e rápida protegendo tudo o que você faz em redes públicas."),
-    Step(Icons.Rounded.Dns, "Use seu servidor", "Sem cadastro e sem limite: você roda o servidor grátis (ex.: Oracle Cloud) e escaneia um QR code."),
+    Step(Icons.Rounded.Dns, "Servidores em vários países", "Sem cadastro: escolha entre centenas de servidores gratuitos do VPN Gate, ou use o seu próprio."),
     Step(Icons.Rounded.Wifi, "Auto-conexão no Wi‑Fi", "Escolha as redes onde a VPN liga sozinha, e ela desliga quando você sai delas."),
 )
 

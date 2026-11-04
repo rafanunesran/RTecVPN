@@ -52,6 +52,7 @@ import androidx.navigation.compose.rememberNavController
 import br.com.rtec.vpn.ui.AddServerSheet
 import br.com.rtec.vpn.ui.Cyan
 import br.com.rtec.vpn.ui.DetailsScreen
+import br.com.rtec.vpn.ui.FreeServersState
 import br.com.rtec.vpn.ui.HomeScreen
 import br.com.rtec.vpn.ui.Inter
 import br.com.rtec.vpn.ui.LocalRTec
@@ -75,9 +76,17 @@ class MainActivity : ComponentActivity() {
     private lateinit var prefs: Prefs
     private var showAddSheet by mutableStateOf(false)
     private var updateStatus by mutableStateOf<String?>(null)
+    private var vgServers by mutableStateOf<List<VgServer>>(emptyList())
+    private var vgLoading by mutableStateOf(false)
+    private var vgError by mutableStateOf<String?>(null)
+    private var showInstallOpenVpn by mutableStateOf(false)
     /** Ação que espera a permissão de VPN (conectar ou ligar o automático). */
     private var afterVpnPermission: (() -> Unit)? = null
     private var afterLocation: (() -> Unit)? = null
+
+    private val openVpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (it.resultCode == RESULT_OK) doConnect() else toast("Autorize o RTecVPN no OpenVPN for Android para conectar")
+    }
 
     private val vpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (VpnService.prepare(this) == null) afterVpnPermission?.invoke() else toast("Permissão de VPN negada")
@@ -106,6 +115,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         prefs = Prefs(this)
         lifecycleScope.launch { runCatching { TunnelManager.refresh(this@MainActivity) } }
+        lifecycleScope.launch { OpenVpnController.attach(this@MainActivity) }
+        vgServers = VpnGate.cached(this)
+        refreshVpnGate()
         runCatching { AutoConnectService.sync(this) }
         setContent {
             val version by Prefs.version.collectAsState()
@@ -129,8 +141,8 @@ class MainActivity : ComponentActivity() {
     private fun AppScaffold() {
         val t = LocalRTec.current
         val nav = rememberNavController()
-        val state by TunnelManager.state.collectAsState()
-        val since by TunnelManager.connectedSince.collectAsState()
+        val state by VpnController.state.collectAsState()
+        val since by VpnController.connectedSince.collectAsState()
         val entry by nav.currentBackStackEntryAsState()
         val route = entry?.destination?.route
         val tabs = listOf(
@@ -176,6 +188,7 @@ class MainActivity : ComponentActivity() {
                     composable("home") {
                         HomeScreen(
                             state = state, connectedSince = since, profile = prefs.selectedProfile,
+                            vg = if (prefs.usingVpnGate) prefs.selectedVg else null,
                             onToggle = { if (state == VpnState.DOWN) requestConnect() else doDisconnect() },
                             onOpenServers = { nav.navigate("servers") { launchSingleTop = true } },
                             onOpenSettings = { nav.navigate("settings") { launchSingleTop = true } },
@@ -185,8 +198,13 @@ class MainActivity : ComponentActivity() {
                     }
                     composable("servers") {
                         ServersScreen(
-                            profiles = prefs.profiles, selectedId = prefs.selectedProfile?.id,
-                            activeId = if (state == VpnState.UP) TunnelManager.activeProfileId else null,
+                            profiles = prefs.profiles,
+                            selectedId = if (prefs.usingVpnGate) prefs.selectedId else prefs.selectedProfile?.id,
+                            activeId = when {
+                                state != VpnState.UP -> null
+                                OpenVpnController.state.value == VpnState.UP -> prefs.selectedId
+                                else -> TunnelManager.activeProfileId
+                            },
                             onSelect = { selectServer(it, state) },
                             onAdd = { showAddSheet = true },
                             onRename = { p, name -> prefs.updateProfile(p.copy(name = name.ifBlank { p.name })) },
@@ -199,6 +217,10 @@ class MainActivity : ComponentActivity() {
                                 if (p.id == TunnelManager.activeProfileId) doDisconnect()
                                 prefs.deleteProfile(p.id)
                             },
+                            free = FreeServersState(vgServers, vgLoading, vgError, OpenVpnController.isInstalled(this@MainActivity)),
+                            onSelectFree = { srv -> selectFree(srv, state) },
+                            onRefreshFree = { refreshVpnGate() },
+                            onInstallOpenVpn = { installOpenVpn() },
                         )
                     }
                     composable("wifi") {
@@ -245,6 +267,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        if (showInstallOpenVpn) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showInstallOpenVpn = false },
+                title = { Text("Falta um passo") },
+                text = { Text("Os servidores gratuitos do VPN Gate usam OpenVPN. Instale o app grátis \"OpenVPN for Android\" (só uma vez) e volte aqui: o RTecVPN conecta por ele.") },
+                confirmButton = { androidx.compose.material3.TextButton(onClick = { showInstallOpenVpn = false; installOpenVpn() }) { Text("Instalar") } },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { showInstallOpenVpn = false }) { Text("Agora não") } },
+            )
+        }
         if (showAddSheet) {
             AddServerSheet(
                 onDismiss = { showAddSheet = false },
@@ -275,24 +306,62 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun selectServer(p: Profile, state: VpnState) {
+        val wasVg = prefs.usingVpnGate
         prefs.selectedId = p.id
         // Se estiver conectado em outro servidor, troca na hora
-        if (state == VpnState.UP && TunnelManager.activeProfileId != p.id) {
-            lifecycleScope.launch {
-                runCatching { TunnelManager.connect(this@MainActivity, p.id) }
-                    .onFailure { toast("Erro: ${it.message}") }
+        if (state == VpnState.UP && (wasVg || TunnelManager.activeProfileId != p.id)) requestConnect()
+    }
+
+    private fun selectFree(srv: VgServer, state: VpnState) {
+        val changed = prefs.selectedId != srv.id
+        prefs.selectVg(srv)
+        if (state == VpnState.UP && changed) requestConnect()
+        else if (state == VpnState.DOWN && !OpenVpnController.isInstalled(this)) showInstallOpenVpn = true
+    }
+
+    private fun refreshVpnGate() {
+        if (vgLoading) return
+        vgLoading = true
+        lifecycleScope.launch {
+            try {
+                vgServers = VpnGate.fetch(this@MainActivity)
+                vgError = null
+            } catch (e: Exception) {
+                vgError = e.message ?: e.javaClass.simpleName
+            } finally {
+                vgLoading = false
             }
+            // Sem nenhum servidor escolhido: já deixa o melhor gratuito pronto para conectar
+            if (!prefs.hasAnyServer) vgServers.firstOrNull()?.let { prefs.selectVg(it) }
         }
     }
 
+    private fun installOpenVpn() {
+        val pkg = OpenVpnController.PACKAGE
+        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg"))) }
+            .onFailure { openUrl("https://play.google.com/store/apps/details?id=$pkg") }
+    }
+
     private fun requestConnect() {
+        if (prefs.usingVpnGate) {
+            if (!OpenVpnController.isInstalled(this)) { showInstallOpenVpn = true; return }
+            lifecycleScope.launch {
+                try {
+                    val intent = OpenVpnController.permissionIntent(this@MainActivity)
+                    if (intent != null) openVpnPermission.launch(intent) else doConnect()
+                } catch (e: Exception) {
+                    toast("Erro: ${e.message ?: e.javaClass.simpleName}")
+                }
+            }
+            return
+        }
         val intent = VpnService.prepare(this)
         if (intent != null) { afterVpnPermission = { doConnect() }; vpnPermission.launch(intent) } else doConnect()
     }
 
     private fun doConnect() = lifecycleScope.launch {
         try {
-            TunnelManager.connect(this@MainActivity)
+            VpnController.connect(this@MainActivity)
             prefs.autoStarted = false // ligado manualmente: não desligar ao sair do Wi-Fi
             prefs.pausedSsid = null
         } catch (e: Exception) {
@@ -302,7 +371,7 @@ class MainActivity : ComponentActivity() {
 
     private fun doDisconnect() = lifecycleScope.launch {
         try {
-            TunnelManager.disconnect(this@MainActivity)
+            VpnController.disconnect(this@MainActivity)
             prefs.autoStarted = false
             prefs.pausedSsid = WifiUtils.currentSsid(this@MainActivity)
         } catch (e: Exception) {
@@ -312,9 +381,9 @@ class MainActivity : ComponentActivity() {
 
     private fun enableAuto() {
         when {
-            prefs.selectedProfile == null -> toast("Adicione um servidor primeiro")
+            !prefs.hasAnyServer -> toast("Escolha um servidor primeiro")
             !hasLocation() -> requestLocation { enableAuto() }
-            VpnService.prepare(this) != null -> {
+            !prefs.usingVpnGate && VpnService.prepare(this) != null -> {
                 afterVpnPermission = { enableAuto() }
                 vpnPermission.launch(VpnService.prepare(this))
             }

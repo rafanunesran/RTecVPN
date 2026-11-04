@@ -19,10 +19,10 @@ class BootReceiver : BroadcastReceiver() {
             .onFailure { Log.w(TAG, "Não foi possível iniciar o monitor", it) }
 
         val prefs = Prefs(context)
-        if (prefs.connectOnBoot && prefs.selectedProfile != null && VpnService.prepare(context) == null) {
+        if (prefs.connectOnBoot && prefs.hasAnyServer && (prefs.usingVpnGate || VpnService.prepare(context) == null)) {
             val pending = goAsync()
             CoroutineScope(Dispatchers.IO).launch {
-                runCatching { TunnelManager.connect(context.applicationContext) }
+                runCatching { VpnController.connect(context.applicationContext) }
                     .onFailure { Log.w(TAG, "Falha ao conectar no boot", it) }
                 pending.finish()
             }

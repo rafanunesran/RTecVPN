@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.rtec.vpn.Profile
+import br.com.rtec.vpn.VgServer
 import com.google.zxing.BarcodeFormat
 import com.journeyapps.barcodescanner.BarcodeEncoder
 
@@ -67,8 +68,13 @@ fun ServersScreen(
     onRename: (Profile, String) -> Unit,
     onEditConfig: (Profile, String) -> Unit,
     onDelete: (Profile) -> Unit,
+    free: FreeServersState,
+    onSelectFree: (VgServer) -> Unit,
+    onRefreshFree: () -> Unit,
+    onInstallOpenVpn: () -> Unit,
 ) {
     val t = LocalRTec.current
+    var tab by remember { mutableStateOf(if (profiles.isEmpty()) 0 else if (selectedId?.startsWith("vg:") == true) 0 else 1) }
     var renaming by remember { mutableStateOf<Profile?>(null) }
     var editing by remember { mutableStateOf<Profile?>(null) }
     var sharing by remember { mutableStateOf<Profile?>(null) }
@@ -76,8 +82,12 @@ fun ServersScreen(
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            Text("Servidores", style = Type.title, color = t.text, modifier = Modifier.padding(vertical = 16.dp))
-            if (profiles.isEmpty()) {
+            Text("Servidores", style = Type.title, color = t.text, modifier = Modifier.padding(top = 16.dp, bottom = 12.dp))
+            Segmented(listOf("Gratuitos", "Meus servidores"), tab) { tab = it }
+            Spacer(Modifier.height(12.dp))
+            if (tab == 0) {
+                FreeServersList(free, selectedId, activeId, onSelectFree, onRefreshFree, onInstallOpenVpn)
+            } else if (profiles.isEmpty()) {
                 EmptyServers(onAdd)
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -93,7 +103,7 @@ fun ServersScreen(
                 }
             }
         }
-        if (profiles.isNotEmpty()) {
+        if (tab == 1 && profiles.isNotEmpty()) {
             Box(
                 Modifier.align(Alignment.BottomEnd).padding(20.dp).size(56.dp).clip(RoundedCornerShape(18.dp))
                     .background(BrandGradient).clickable(onClick = onAdd),

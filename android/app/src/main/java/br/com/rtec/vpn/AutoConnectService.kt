@@ -86,18 +86,18 @@ class AutoConnectService : Service() {
         val paused = prefs.pausedSsid != null
         val onTrusted = current.any { it in trusted } ||
             (prefs.connectOnOpenWifi && wifiNetworks.values.any { it.open })
-        val state = TunnelManager.state.value
+        val state = VpnController.state.value
         scope.launch {
             try {
                 if (onTrusted && !paused && state == VpnState.DOWN) {
-                    if (VpnService.prepare(this@AutoConnectService) != null) {
+                    if (!prefs.usingVpnGate && VpnService.prepare(this@AutoConnectService) != null) {
                         Log.w(TAG, "Permissão de VPN ausente; abra o app para conceder")
                         return@launch
                     }
-                    TunnelManager.connect(this@AutoConnectService)
+                    VpnController.connect(this@AutoConnectService)
                     prefs.autoStarted = true
                 } else if (!onTrusted && state != VpnState.DOWN && prefs.autoStarted && prefs.disconnectOnLeave) {
-                    TunnelManager.disconnect(this@AutoConnectService)
+                    VpnController.disconnect(this@AutoConnectService)
                     prefs.autoStarted = false
                 }
             } catch (e: Exception) {

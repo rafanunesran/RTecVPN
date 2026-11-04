@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import br.com.rtec.vpn.Profile
+import br.com.rtec.vpn.VgServer
 import br.com.rtec.vpn.TunnelManager
 import br.com.rtec.vpn.TunnelStats
 import br.com.rtec.vpn.VpnState
@@ -50,6 +51,7 @@ fun HomeScreen(
     state: VpnState,
     connectedSince: Long?,
     profile: Profile?,
+    vg: VgServer?,
     onToggle: () -> Unit,
     onOpenServers: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -79,7 +81,7 @@ fun HomeScreen(
             IconButton(onClick = onOpenSettings) { Icon(Icons.Rounded.Settings, "Ajustes", tint = t.muted) }
         }
         Spacer(Modifier.height(24.dp))
-        ConnectButton(state, enabled = profile != null, onClick = onToggle)
+        ConnectButton(state, enabled = profile != null || vg != null, onClick = onToggle)
         Spacer(Modifier.height(16.dp))
         Text(
             when (state) { VpnState.UP -> "Conectado"; VpnState.CONNECTING -> "Conectando…"; VpnState.DOWN -> "Desconectado" },
@@ -87,12 +89,22 @@ fun HomeScreen(
         )
         Text(
             if (state == VpnState.UP && connectedSince != null) formatDuration(now - connectedSince)
-            else if (profile == null) "Adicione um servidor para começar" else "Toque para proteger sua conexão",
+            else if (profile == null && vg == null) "Carregando servidores gratuitos…" else "Toque para proteger sua conexão",
             style = Type.mono, color = t.muted, modifier = Modifier.padding(top = 4.dp),
         )
         Spacer(Modifier.height(24.dp))
 
-        if (profile == null) {
+        if (vg != null) {
+            FreeServerCard(vg, selected = false, active = state == VpnState.UP, onClick = onOpenServers)
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatTile("País", vg.countryCode, Modifier.weight(1f))
+                StatTile("Protocolo", vg.transport, Modifier.weight(1f))
+                StatTile("Sessão", if (state == VpnState.UP && connectedSince != null) formatDuration(now - connectedSince).dropLast(3) else "—", Modifier.weight(1f))
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = onOpenServers) { Text("Trocar de país", color = Cyan) }
+        } else if (profile == null) {
             GradientButton("Adicionar servidor", icon = Icons.Rounded.Add, onClick = onAddServer)
         } else {
             RCard(onClick = onOpenServers) {
