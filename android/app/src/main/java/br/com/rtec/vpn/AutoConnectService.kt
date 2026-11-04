@@ -38,7 +38,7 @@ class AutoConnectService : Service() {
     private val wifiNetworks = mutableMapOf<Network, String?>()
 
     private val callback by lazy {
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) FLAG_INCLUDE_LOCATION_INFO else 0
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) ConnectivityManager.NetworkCallback.FLAG_INCLUDE_LOCATION_INFO else 0
         object : ConnectivityManager.NetworkCallback(flags) {
             override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
                 val ssid = WifiUtils.ssidFrom(caps, this@AutoConnectService)
