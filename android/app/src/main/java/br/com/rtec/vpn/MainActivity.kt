@@ -143,6 +143,7 @@ class MainActivity : ComponentActivity() {
         val nav = rememberNavController()
         val state by VpnController.state.collectAsState()
         val since by VpnController.connectedSince.collectAsState()
+        val ovpnState by OpenVpnController.state.collectAsState()
         val entry by nav.currentBackStackEntryAsState()
         val route = entry?.destination?.route
         val tabs = listOf(
@@ -202,7 +203,7 @@ class MainActivity : ComponentActivity() {
                             selectedId = if (prefs.usingVpnGate) prefs.selectedId else prefs.selectedProfile?.id,
                             activeId = when {
                                 state != VpnState.UP -> null
-                                OpenVpnController.state.value == VpnState.UP -> prefs.selectedId
+                                ovpnState == VpnState.UP -> prefs.selectedId
                                 else -> TunnelManager.activeProfileId
                             },
                             onSelect = { selectServer(it, state) },
