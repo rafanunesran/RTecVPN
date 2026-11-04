@@ -1,8 +1,9 @@
-//! Conexão OpenVPN (servidores gratuitos do VPN Gate) usando o `openvpn` instalado no sistema.
+//! Conexão OpenVPN (servidores gratuitos do VPN Gate).
 //!
 //! - Linux: `openvpn` (o .deb/.rpm já instala) com elevação via `pkexec`.
-//! - macOS: `brew install openvpn`, com o prompt de administrador do `osascript`.
-//! - Windows: OpenVPN Community (https://openvpn.net/community-downloads/), via UAC.
+//! - macOS: `openvpn` que vem dentro do RTecVPN.app, com o prompt de administrador do `osascript`.
+//! - Windows: OpenVPN Community, cujo instalador vem dentro do RTecVPN e é instalado em silêncio
+//!   na primeira conexão (pedido do UAC).
 //!
 //! O estado vem do log: o processo grava "Initialization Sequence Completed" quando o túnel sobe.
 
@@ -96,11 +97,14 @@ fn process_alive(p: &Paths) -> bool {
 
 // ---------------------------------------------------------------- macOS
 #[cfg(target_os = "macos")]
-fn openvpn_bin() -> &'static str {
+fn openvpn_bin() -> Option<String> {
+    if let Some(p) = crate::platform::bundled("bin/openvpn") {
+        return Some(p.display().to_string());
+    }
     ["/opt/homebrew/sbin/openvpn", "/usr/local/sbin/openvpn", "/opt/homebrew/bin/openvpn", "/usr/local/bin/openvpn"]
         .into_iter()
         .find(|p| Path::new(p).exists())
-        .unwrap_or("openvpn")
+        .map(String::from)
 }
 
 #[cfg(target_os = "macos")]
@@ -112,13 +116,11 @@ fn admin_shell(script: &str) -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 pub fn up(p: &Paths) -> Result<(), String> {
-    let bin = openvpn_bin();
-    if bin == "openvpn" {
-        return Err("Instale o OpenVPN: brew install openvpn".into());
-    }
+    let bin = openvpn_bin().ok_or("O OpenVPN não foi encontrado dentro do app. Reinstale o RTecVPN.")?;
+    let bin = sh_quote(Path::new(&bin));
     let _ = std::fs::remove_file(&p.log);
     admin_shell(&format!(
-        "{bin} --config {} --daemon rtecvpn --writepid {} --log {}",
+        "[ -x {bin} ] || chmod 755 {bin}; {bin} --config {} --daemon rtecvpn --writepid {} --log {}",
         sh_quote(&p.config), sh_quote(&p.pid), sh_quote(&p.log)
     ))
 }
@@ -159,7 +161,7 @@ fn ps_args(args: &[String]) -> String {
 pub fn up(p: &Paths) -> Result<(), String> {
     let exe = openvpn_exe();
     if !Path::new(&exe).exists() {
-        return Err("Instale o OpenVPN Community: https://openvpn.net/community-downloads/".into());
+        install_openvpn()?;
     }
     let _ = std::fs::remove_file(&p.log);
     let args = ps_args(&[
@@ -169,6 +171,24 @@ pub fn up(p: &Paths) -> Result<(), String> {
     // Sem -Wait: o openvpn.exe continua rodando (elevado) em segundo plano
     let ps = format!("Start-Process -FilePath '{exe}' -ArgumentList {args} -Verb RunAs -WindowStyle Hidden");
     check(run(Command::new("powershell").args(["-NoProfile", "-NonInteractive", "-Command", &ps]))?)
+}
+
+/// Instala o OpenVPN Community que vem dentro do app: só o serviço e os drivers, sem a interface
+/// própria dele. Se a lista de componentes mudar numa versão nova, cai na instalação padrão.
+#[cfg(windows)]
+fn install_openvpn() -> Result<(), String> {
+    use crate::platform::install_bundled_msi;
+    install_bundled_msi(
+        "openvpn.msi",
+        &["=ADDLOCAL=OpenVPN.Service,OpenVPN,Drivers,Drivers.Wintun,Drivers.TAPWindows6,Drivers.OvpnDco"],
+    )
+    .or_else(|_| install_bundled_msi("openvpn.msi", &[]))
+    .map_err(|e| format!("Não foi possível instalar o OpenVPN: {e}"))?;
+    if Path::new(&openvpn_exe()).exists() {
+        Ok(())
+    } else {
+        Err("A instalação do OpenVPN não terminou. Tente conectar de novo.".into())
+    }
 }
 
 #[cfg(windows)]

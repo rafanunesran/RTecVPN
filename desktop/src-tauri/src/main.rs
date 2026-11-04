@@ -643,6 +643,9 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .setup(|app| {
+            if let Ok(res) = app.path().resource_dir() {
+                platform::set_resource_dir(res);
+            }
             let dir = app.path().app_config_dir()?;
             std::fs::create_dir_all(dir.join("profiles"))?;
             let mut settings: Settings = std::fs::read_to_string(dir.join("settings.json"))

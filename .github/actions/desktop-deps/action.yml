@@ -1,0 +1,25 @@
+name: Componentes VPN do desktop
+description: Coloca em desktop/src-tauri/resources o que vai dentro do app (instaladores no Windows, openvpn no macOS)
+runs:
+  using: composite
+  steps:
+    - if: runner.os == 'Windows'
+      id: win-cache
+      uses: actions/cache@v4
+      with:
+        path: desktop/src-tauri/resources/windows
+        key: win-installers-${{ hashFiles('desktop/scripts/versions.env', 'desktop/scripts/fetch-windows-installers.sh') }}
+    - if: runner.os == 'Windows' && steps.win-cache.outputs.cache-hit != 'true'
+      name: Baixar instaladores do OpenVPN e do WireGuard
+      shell: bash
+      run: desktop/scripts/fetch-windows-installers.sh
+    - if: runner.os == 'macOS'
+      id: mac-cache
+      uses: actions/cache@v4
+      with:
+        path: desktop/src-tauri/resources/macos
+        key: mac-openvpn-${{ hashFiles('desktop/scripts/versions.env', 'desktop/scripts/build-openvpn-macos.sh') }}
+    - if: runner.os == 'macOS' && steps.mac-cache.outputs.cache-hit != 'true'
+      name: Compilar o openvpn (universal)
+      shell: bash
+      run: WORK="$RUNNER_TEMP/openvpn-macos" desktop/scripts/build-openvpn-macos.sh

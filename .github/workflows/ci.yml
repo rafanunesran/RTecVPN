@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: ShellCheck
-        run: shellcheck server/*.sh
+        run: shellcheck -x server/*.sh android/openvpn/*.sh desktop/scripts/*.sh
 
   android:
     runs-on: ubuntu-latest
@@ -49,6 +49,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+      - uses: ./.github/actions/desktop-deps
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:

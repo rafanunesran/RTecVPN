@@ -60,8 +60,8 @@ O app tem as mesmas funções do Android: botão de conectar, importação da co
 
 | Sistema | Servidores gratuitos (OpenVPN) | Seu servidor (WireGuard) | Pedido de permissão |
 |---|---|---|---|
-| Windows | [OpenVPN Community](https://openvpn.net/community-downloads/) | [WireGuard para Windows](https://www.wireguard.com/install/) | UAC ao conectar/desconectar |
-| macOS | `brew install openvpn` | `brew install wireguard-tools` | Senha de administrador ao conectar/desconectar |
+| Windows | já vem no instalador (instala sozinho na 1ª conexão) | já vem no instalador (instala sozinho na 1ª conexão) | UAC ao conectar/desconectar |
+| macOS | já vem dentro do app | `brew install wireguard-tools` | Senha de administrador ao conectar/desconectar |
 | Linux | `openvpn` (o `.deb`/`.rpm` já instala) | `wireguard-tools` (já instala) | Senha via polkit ao conectar/desconectar |
 
 > No macOS 14.4+ e no Windows 11 24H2 o sistema pode esconder o nome do Wi-Fi de apps sem permissão de localização. Se o app mostrar "Wi-Fi atual: —", libere a localização para o RTecVPN nas configurações do sistema.

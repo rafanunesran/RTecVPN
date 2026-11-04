@@ -3,11 +3,27 @@
 //! - Linux: `wg-quick` (pacote wireguard-tools) com elevação via `pkexec`.
 //! - macOS: `wg-quick` do Homebrew com o prompt de administrador do `osascript`.
 //! - Windows: serviço de túnel do WireGuard para Windows (`wireguard.exe /installtunnelservice`) via UAC.
+//!   O instalador oficial vai dentro do RTecVPN e é instalado em silêncio na primeira conexão.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::OnceLock;
 
 pub const TUNNEL: &str = "rtecvpn";
+
+static RESOURCES: OnceLock<PathBuf> = OnceLock::new();
+
+/// Pasta de recursos do app (instaladores/binários que vão junto com o RTecVPN).
+pub fn set_resource_dir(dir: PathBuf) {
+    let _ = RESOURCES.set(dir);
+}
+
+/// Caminho de um arquivo que vem dentro do app, se existir.
+#[allow(dead_code)]
+pub fn bundled(rel: &str) -> Option<PathBuf> {
+    let p = RESOURCES.get()?.join(rel);
+    p.exists().then_some(p)
+}
 
 fn run(cmd: &mut Command) -> Result<Output, String> {
     #[cfg(windows)]
@@ -145,21 +161,43 @@ fn wireguard_exe() -> String {
     format!("{base}\\WireGuard\\wireguard.exe")
 }
 
+/// Executa um programa como administrador (pedido do UAC) e espera terminar.
+/// Cada argumento vai entre aspas, a não ser que comece com `=` (ex.: propriedades do msiexec).
 #[cfg(windows)]
-fn elevated(args: &[&str]) -> Result<(), String> {
-    let exe = wireguard_exe();
-    if !Path::new(&exe).exists() {
-        return Err("Instale o WireGuard para Windows: https://www.wireguard.com/install/".into());
-    }
+pub fn run_elevated(exe: &str, args: &[&str]) -> Result<(), String> {
     let list = args
         .iter()
-        .map(|a| format!("'\"{}\"'", a.replace('\'', "''")))
+        .map(|a| match a.strip_prefix('=') {
+            Some(raw) => format!("'{}'", raw.replace('\'', "''")),
+            None => format!("'\"{}\"'", a.replace('\'', "''")),
+        })
         .collect::<Vec<_>>()
         .join(",");
+    let exe = exe.replace('\'', "''");
     let ps = format!(
         "$p = Start-Process -FilePath '{exe}' -ArgumentList {list} -Verb RunAs -Wait -PassThru -WindowStyle Hidden; exit $p.ExitCode"
     );
     check(run(Command::new("powershell").args(["-NoProfile", "-NonInteractive", "-Command", &ps]))?)
+}
+
+/// Instala em silêncio um .msi que vem dentro do RTecVPN (pasta installers/).
+#[cfg(windows)]
+pub fn install_bundled_msi(name: &str, props: &[&str]) -> Result<(), String> {
+    let msi = bundled(&format!("installers/{name}")).ok_or_else(|| format!("instalador {name} não encontrado no app"))?;
+    let msi = msi.display().to_string();
+    let mut args = vec!["/i", msi.as_str(), "=/qn", "=/norestart"];
+    args.extend_from_slice(props);
+    run_elevated("msiexec.exe", &args)
+}
+
+#[cfg(windows)]
+fn elevated(args: &[&str]) -> Result<(), String> {
+    let exe = wireguard_exe();
+    if !Path::new(&exe).exists() {
+        install_bundled_msi("wireguard.msi", &["=DO_NOT_LAUNCH=1"])
+            .map_err(|e| format!("Não foi possível instalar o WireGuard: {e}"))?;
+    }
+    run_elevated(&exe, args)
 }
 
 #[cfg(windows)]

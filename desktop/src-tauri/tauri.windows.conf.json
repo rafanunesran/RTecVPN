@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "resources": {
+      "resources/windows/openvpn.msi": "installers/openvpn.msi",
+      "resources/windows/wireguard.msi": "installers/wireguard.msi"
+    }
+  }
+}
