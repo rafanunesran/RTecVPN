@@ -7,51 +7,116 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <nav class="tabs">
-    <button data-tab="home" class="active">Início</button>
-    <button data-tab="wifi">Wi-Fi automático</button>
-    <button data-tab="server">Servidor</button>
-  </nav>
-
-  <section id="home" class="tab active">
-    <p class="state" id="stateLabel">Desconectado</p>
-    <button id="toggle" class="power" aria-label="Conectar">
-      <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg>
-    </button>
-    <div class="card info">
-      <div><span>Servidor</span><strong id="server">—</strong></div>
-      <div><span>Wi-Fi atual</span><strong id="ssid">—</strong></div>
-      <div><span>Conexão automática</span><strong id="autoLabel">Desligada</strong></div>
-    </div>
-    <p class="error" id="error" hidden></p>
+  <!-- Onboarding -->
+  <section id="onboarding" class="screen" hidden>
+    <div class="top-right"><button class="link" id="obSkip">Pular</button></div>
+    <div class="ob-hero" id="obIcon"></div>
+    <h1 id="obTitle"></h1>
+    <p class="muted center" id="obText"></p>
+    <div class="dots" id="obDots"></div>
+    <button class="primary" id="obNext">Próximo</button>
   </section>
 
-  <section id="wifi" class="tab">
-    <div class="card">
-      <label class="switch-row">
-        <span>Ligar VPN em redes escolhidas</span>
-        <input type="checkbox" id="autoSwitch" />
-      </label>
-      <p class="muted">A VPN liga sozinha quando você entra numa das redes abaixo e desliga quando sai dela. Se você ligou ou desligou a VPN na mão, o app respeita até você trocar de rede.</p>
-    </div>
-    <ul id="ssidList" class="list"></ul>
-    <button id="addCurrent" class="primary">Adicionar rede atual</button>
-    <form id="addForm" class="row">
-      <input id="ssidInput" placeholder="Nome da rede (SSID)" />
-      <button type="submit" class="secondary">Adicionar</button>
-    </form>
-  </section>
-
-  <section id="server" class="tab">
-    <div class="card">
-      <p class="muted">Cole a configuração gerada pelo <code>add-client.sh</code> no seu servidor, ou abra o arquivo <code>.conf</code>.</p>
-      <textarea id="configText" rows="10" spellcheck="false" placeholder="[Interface]&#10;PrivateKey = ...&#10;Address = 10.8.0.2/32&#10;&#10;[Peer]&#10;PublicKey = ...&#10;Endpoint = 1.2.3.4:51820"></textarea>
-      <div class="row">
-        <label class="secondary file">Abrir arquivo .conf<input type="file" id="fileInput" accept=".conf,text/plain" hidden /></label>
-        <button id="saveConfig" class="primary">Salvar</button>
+  <main id="app" hidden>
+    <!-- Início -->
+    <section id="home" class="tab active">
+      <header class="bar">
+        <span class="logo"><svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3z"/></svg></span>
+        <strong>RTecVPN</strong>
+        <button class="icon-btn" data-go="settings" aria-label="Ajustes"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+      </header>
+      <div class="connect">
+        <div class="halo"></div>
+        <svg class="ring" viewBox="0 0 200 200"><circle cx="100" cy="100" r="98" /></svg>
+        <button id="toggle" class="power" aria-label="Conectar">
+          <svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/></svg>
+        </button>
       </div>
+      <p class="state" id="stateLabel">Desconectado</p>
+      <p class="mono muted center" id="timer">Toque para proteger sua conexão</p>
+      <div id="homeServer"></div>
+      <div class="tiles">
+        <div class="tile"><span>Download</span><b id="rx">—</b></div>
+        <div class="tile"><span>Upload</span><b id="tx">—</b></div>
+        <div class="tile"><span>Sessão</span><b id="session">—</b></div>
+      </div>
+      <p class="center"><button class="link" id="detailsLink">Ver detalhes da conexão</button></p>
+      <p class="error" id="error" hidden></p>
+    </section>
+
+    <!-- Servidores -->
+    <section id="servers" class="tab">
+      <h2>Servidores</h2>
+      <div id="serverList" class="stack"></div>
+      <button class="fab" id="fab" aria-label="Adicionar servidor">+</button>
+    </section>
+
+    <!-- Wi-Fi -->
+    <section id="wifi" class="tab">
+      <h2>Wi‑Fi automático</h2>
+      <div class="card">
+        <label class="row-item"><div><b>Conectar automaticamente em redes Wi‑Fi escolhidas</b><small>A VPN liga ao entrar nessas redes</small></div><input type="checkbox" class="switch" id="autoSwitch" /></label>
+      </div>
+      <p class="overline">Rede atual</p>
+      <div class="card" id="currentCard"></div>
+      <div class="row-head"><p class="overline">Redes escolhidas</p><button class="link" id="addManualBtn">Adicionar pelo nome</button></div>
+      <form id="addForm" class="inline" hidden><input id="ssidInput" placeholder="Nome da rede (SSID)" /><button class="secondary" type="submit">Adicionar</button></form>
+      <div class="card" id="ssidList"></div>
+      <p class="overline">Comportamento</p>
+      <div class="card">
+        <label class="row-item"><div><b>Desconectar ao sair dessas redes</b><small>Só quando foi a regra automática que ligou</small></div><input type="checkbox" class="switch" id="leaveSwitch" /></label>
+      </div>
+      <div class="notice">O Windows 11 e o macOS podem esconder o nome do Wi‑Fi de apps sem permissão de localização. Se a rede atual aparecer vazia, libere a localização para o RTecVPN nas configurações do sistema.</div>
+    </section>
+
+    <!-- Ajustes -->
+    <section id="settings" class="tab">
+      <h2>Ajustes</h2>
+      <p class="overline">Conexão</p>
+      <div class="card">
+        <label class="row-item"><div><b>Iniciar com o sistema</b><small>Abre minimizado na bandeja para o Wi‑Fi automático funcionar</small></div><input type="checkbox" class="switch" id="autostartSwitch" /></label>
+      </div>
+      <p class="overline">Aparência</p>
+      <div class="card">
+        <b>Tema</b>
+        <div class="chips" id="themeChips">
+          <button data-theme="dark">Escuro</button><button data-theme="light">Claro</button><button data-theme="system">Sistema</button>
+        </div>
+      </div>
+      <p class="overline">Sobre</p>
+      <div class="card">
+        <div class="row-item"><div><b>RTecVPN</b><small id="version"></small></div></div>
+        <a class="row-item" href="https://github.com/rafanunesran/RTecVPN" target="_blank"><div><b>Código no GitHub</b><small>rafanunesran/RTecVPN</small></div><span class="chev">›</span></a>
+        <a class="row-item" href="https://github.com/rafanunesran/RTecVPN/releases/latest" target="_blank"><div><b>Verificar atualizações</b><small>Abre a página de versões</small></div><span class="chev">›</span></a>
+      </div>
+    </section>
+
+    <!-- Detalhes -->
+    <section id="details" class="tab">
+      <header class="bar"><button class="icon-btn" data-go="home" aria-label="Voltar">‹</button><strong>Detalhes da conexão</strong></header>
+      <div class="card" id="detailList"></div>
+    </section>
+
+    <nav class="bottom">
+      <button data-tab="home" class="active"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Início</button>
+      <button data-tab="servers"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/></svg>Servidores</button>
+      <button data-tab="wifi"><svg viewBox="0 0 24 24"><path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg>Wi‑Fi</button>
+      <button data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Ajustes</button>
+    </nav>
+  </main>
+
+  <!-- Adicionar servidor -->
+  <div class="sheet-bg" id="sheet" hidden>
+    <div class="sheet">
+      <h3>Adicionar servidor</h3>
+      <p class="muted">Abra o arquivo <code>.conf</code> gerado pelo <code>add-client.sh</code> ou cole o conteúdo.</p>
+      <label class="primary file">Importar arquivo .conf<input type="file" id="fileInput" accept=".conf,text/plain" hidden /></label>
+      <input id="nameInput" placeholder="Nome (opcional)" />
+      <textarea id="configText" rows="8" spellcheck="false" placeholder="[Interface]&#10;PrivateKey = ...&#10;Address = 10.8.0.2/32&#10;&#10;[Peer]&#10;PublicKey = ...&#10;Endpoint = 1.2.3.4:51820"></textarea>
+      <p class="error" id="sheetError" hidden></p>
+      <div class="inline"><button class="secondary" id="sheetCancel">Cancelar</button><button class="primary" id="sheetSave">Salvar</button></div>
     </div>
-  </section>
+  </div>
 
   <script src="app.js"></script>
 </body>

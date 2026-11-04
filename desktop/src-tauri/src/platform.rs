@@ -197,6 +197,22 @@ pub fn current_ssid() -> Option<String> {
     None
 }
 
+/// Bytes recebidos/enviados pelo túnel (só no Linux, onde o contador é legível sem root).
+#[cfg(target_os = "linux")]
+pub fn transfer() -> (Option<u64>, Option<u64>) {
+    let read = |f: &str| {
+        std::fs::read_to_string(Path::new("/sys/class/net").join(TUNNEL).join("statistics").join(f))
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+    };
+    (read("rx_bytes"), read("tx_bytes"))
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn transfer() -> (Option<u64>, Option<u64>) {
+    (None, None)
+}
+
 fn clean(raw: &str) -> Option<String> {
     let s = raw.trim();
     if s.is_empty() || s.starts_with('<') || s.contains("not associated") {
