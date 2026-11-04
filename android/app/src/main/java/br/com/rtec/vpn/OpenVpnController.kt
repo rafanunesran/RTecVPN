@@ -8,6 +8,7 @@ import android.os.IBinder
 import de.blinkt.openvpn.core.ConfigParser
 import de.blinkt.openvpn.core.ConnectionStatus
 import de.blinkt.openvpn.core.IOpenVPNServiceInternal
+import de.blinkt.openvpn.core.LogItem
 import de.blinkt.openvpn.core.OpenVPNService
 import de.blinkt.openvpn.core.ProfileManager
 import de.blinkt.openvpn.core.VPNLaunchHelper
@@ -36,11 +37,32 @@ object OpenVpnController {
     /** Bytes recebidos e enviados na conexão atual. */
     val bytes: StateFlow<Pair<Long, Long>> = _bytes.asStateFlow()
 
+    private val _phase = MutableStateFlow<String?>(null)
+    /** Etapa da conexão em português (ex.: "Esperando resposta do servidor"). */
+    val phase: StateFlow<String?> = _phase.asStateFlow()
+
+    /** Última mensagem de erro do OpenVPN (para mostrar quando nenhum servidor conecta). */
+    @Volatile var lastError: String? = null
+        private set
+
     private var initialized = false
+    private var appContext: Context? = null
+
+    private fun phaseOf(state: String?): String? = when (state) {
+        "RESOLVE" -> "Procurando o servidor"
+        "TCP_CONNECT", "CONNECTING", "WAIT" -> "Esperando resposta do servidor"
+        "AUTH", "AUTH_PENDING" -> "Autenticando"
+        "GET_CONFIG", "ASSIGN_IP", "ADD_ROUTES" -> "Configurando a conexão"
+        "RECONNECTING" -> "Reconectando"
+        "NONETWORK" -> "Sem internet"
+        "VPN_GENERATE_CONFIG", "USER_VPN_PERMISSION" -> "Preparando"
+        else -> null
+    }
 
     private val stateListener = object : VpnStatus.StateListener {
         override fun updateState(state: String?, logmessage: String?, localizedResId: Int, level: ConnectionStatus?, intent: Intent?) {
             _message.value = logmessage
+            _phase.value = phaseOf(state)
             val new = when (level) {
                 ConnectionStatus.LEVEL_CONNECTED -> VpnState.UP
                 ConnectionStatus.LEVEL_NOTCONNECTED, ConnectionStatus.LEVEL_NONETWORK,
@@ -59,12 +81,20 @@ object OpenVpnController {
         _bytes.value = inBytes to outBytes
     }
 
+    private val logListener = VpnStatus.LogListener { item: LogItem ->
+        if (item.logLevel == VpnStatus.LogLevel.ERROR) {
+            lastError = appContext?.let { runCatching { item.getString(it) }.getOrNull() }
+        }
+    }
+
     /** Chamado no Application: passa a receber o status do motor OpenVPN. */
-    fun init() {
+    fun init(context: Context) {
         if (initialized) return
         initialized = true
+        appContext = context.applicationContext
         VpnStatus.addStateListener(stateListener)
         VpnStatus.addByteCountListener(byteListener)
+        VpnStatus.addLogListener(logListener)
     }
 
     /** Conecta com a config .ovpn (a permissão de VPN do Android já deve ter sido dada). */
@@ -74,6 +104,7 @@ object OpenVpnController {
         parser.parseConfig(StringReader(config))
         val profile = parser.convertProfile().apply { mName = "VPN Gate" }
         ProfileManager.setTemporaryProfile(app, profile)
+        lastError = null
         _state.value = VpnState.CONNECTING
         VPNLaunchHelper.startOpenVpn(profile, app, "RTecVPN", true)
     }

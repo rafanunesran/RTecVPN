@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -87,11 +88,20 @@ fun HomeScreen(
             when (state) { VpnState.UP -> "Conectado"; VpnState.CONNECTING -> "Conectando…"; VpnState.DOWN -> "Desconectado" },
             style = Type.display, color = stateColor(state, t.text),
         )
+        val phase by br.com.rtec.vpn.OpenVpnController.phase.collectAsState()
+        val notice by br.com.rtec.vpn.VpnController.notice.collectAsState()
         Text(
             if (state == VpnState.UP && connectedSince != null) formatDuration(now - connectedSince)
+            else if (state == VpnState.CONNECTING && vg != null) (phase ?: "Conectando ao servidor") + "…"
             else if (profile == null && vg == null) "Carregando servidores gratuitos…" else "Toque para proteger sua conexão",
             style = Type.mono, color = t.muted, modifier = Modifier.padding(top = 4.dp),
         )
+        notice?.let {
+            Text(
+                it, style = Type.bodySmall, color = t.muted, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(top = 8.dp, start = 8.dp, end = 8.dp),
+            )
+        }
         Spacer(Modifier.height(24.dp))
 
         if (vg != null) {

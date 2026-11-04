@@ -17,7 +17,7 @@ class RTecApp : ICSOpenVPNApplication() {
 
     override fun onCreate() {
         super.onCreate()
-        OpenVpnController.init()
+        OpenVpnController.init(this)
         // "VPN sempre ativa" do Android (kill switch): o sistema inicia o serviço e nós subimos o túnel
         GoBackend.setAlwaysOnCallback {
             scope.launch {
